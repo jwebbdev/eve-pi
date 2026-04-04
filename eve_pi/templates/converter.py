@@ -51,13 +51,15 @@ def convert_template(
         new_mat = game_data.materials.get(to_product)
         new_type_id = new_mat.type_id if new_mat else None
         if new_type_id and old_product_id:
+            # Swap input routes FIRST (before output ID changes)
+            _swap_recipe_inputs(result, old_product_id, to_product, game_data)
+            # Then swap output in pins and routes
             for pin in result.get("P", []):
                 if pin.get("S") == old_product_id:
                     pin["S"] = new_type_id
             for route in result.get("R", []):
                 if route.get("T") == old_product_id:
                     route["T"] = new_type_id
-            _swap_recipe_inputs(result, old_product_id, to_product, game_data)
         result["Cmt"] = f"Converted: {to_product}"
         if to_planet_type:
             result["Cmt"] = f"{to_product} on {to_planet_type}"
