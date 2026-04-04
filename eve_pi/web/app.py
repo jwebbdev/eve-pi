@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from eve_pi.cli.optimize import PLANET_TYPE_IDS
@@ -23,6 +24,7 @@ from eve_pi.optimizer.allocator import (
 from eve_pi.templates.converter import convert_template
 
 app = FastAPI(title="EVE PI Optimizer")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # Load game data once at startup
