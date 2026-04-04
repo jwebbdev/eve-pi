@@ -240,6 +240,54 @@ async def convert_template_route(request: Request):
 
 
 
+REFERENCE_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "reference_templates"
+
+
+def _find_reference_template(product: str, setup_value: str) -> Optional[dict]:
+    """Find a reference template for a product and convert it."""
+    if not REFERENCE_TEMPLATES_DIR.exists():
+        return None
+
+    # For extraction (r0_to_p1), look for Miner templates
+    if setup_value == "r0_to_p1":
+        for prefix in ["Miner - 00 - ", "Miner - LS - "]:
+            path = REFERENCE_TEMPLATES_DIR / f"{prefix}{product}.json"
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        # Try fuzzy match (e.g., "Chiral Stuctures" typo in repo)
+        for fname in REFERENCE_TEMPLATES_DIR.glob("Miner - 00 - *.json"):
+            if product.lower().replace(" ", "") in fname.stem.lower().replace(" ", ""):
+                with open(fname, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        return None
+
+    # For factories, look for Factory templates
+    path = REFERENCE_TEMPLATES_DIR / f"Factory - {product}.json"
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+@app.get("/api/template/{setup}/{planet_type}/{product}", response_class=JSONResponse)
+async def generate_template(setup: str, planet_type: str, product: str):
+    """Generate an importable template for a specific setup."""
+    ref = _find_reference_template(product, setup)
+    if not ref:
+        return JSONResponse({"error": f"No reference template found for {product}"}, status_code=404)
+
+    # Convert to the target planet type (product already matches for factories)
+    if setup == "r0_to_p1":
+        # Miner templates are already for the right product, just need planet type swap
+        converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
+    else:
+        # Factory templates — convert planet type (product already correct in reference)
+        converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
+
+    return JSONResponse({"template": converted})
+
+
 def _sanitize(text: str, max_length: int = MAX_FEEDBACK_LENGTH) -> str:
     """Sanitize user input: escape HTML, strip control chars, enforce length."""
     text = text[:max_length]

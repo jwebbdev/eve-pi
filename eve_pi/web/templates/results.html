@@ -47,6 +47,7 @@
                 <th>Character</th>
                 <th class="right">ISK/Day</th>
                 <th class="right">Units/Week</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -59,6 +60,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day * 7) }}</td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
             </tr>
             {% set feeders = feed_by_factory.get(a.product, []) %}
             {% for fa in feeders %}
@@ -70,6 +72,7 @@
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}')">Template</button></td>
             </tr>
             {% endfor %}
             {% endfor %}
@@ -100,6 +103,7 @@
                 <th>Character</th>
                 <th class="right">ISK/Day</th>
                 <th class="right">m3/Day</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -112,6 +116,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
             </tr>
             {% set feeders = feed_by_factory.get(a.product, []) %}
             {% for fa in feeders %}
@@ -123,6 +128,7 @@
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}')">Template</button></td>
             </tr>
             {% endfor %}
             {% endfor %}
@@ -148,6 +154,7 @@
                 <th>Character</th>
                 <th class="right">ISK/Day</th>
                 <th class="right">m3/Day</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -160,6 +167,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -170,4 +178,66 @@
 <div style="margin-top: 20px;">
     <a href="/" class="btn">&larr; Back to Optimizer</a>
 </div>
+
+<!-- Template modal -->
+<div id="templateModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:1000; overflow-y:auto;">
+    <div style="max-width:800px; margin:40px auto; background:#12122a; border:1px solid #2a2a4a; border-radius:8px; padding:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 id="templateTitle" style="color:#00d4ff; margin:0;"></h3>
+            <button class="btn btn-danger btn-sm" onclick="closeTemplateModal()">X</button>
+        </div>
+        <p style="color:#666; font-size:12px; margin-bottom:10px;">Copy this JSON and import it in-game via the PI template import feature.</p>
+        <textarea id="templateJson" readonly rows="12"
+                  style="width:100%; background:#0a0a1a; border:1px solid #2a2a4a; color:#c8d6e5; padding:10px; border-radius:4px; font-family:'Courier New',monospace; font-size:11px; resize:vertical;"></textarea>
+        <div style="margin-top:10px;">
+            <button class="btn btn-sm" onclick="copyTemplate()">Copy to Clipboard</button>
+            <span id="copyConfirm" style="color:#00cc66; margin-left:10px; display:none;">Copied!</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function getTemplate(setup, planetType, product) {
+        fetch(`/api/template/${encodeURIComponent(setup)}/${encodeURIComponent(planetType)}/${encodeURIComponent(product)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                document.getElementById('templateTitle').textContent = `${product} on ${planetType} (${setup})`;
+                document.getElementById('templateJson').value = JSON.stringify(data.template, null, 2);
+                document.getElementById('templateModal').style.display = 'block';
+            })
+            .catch(err => alert('Failed to generate template: ' + err));
+    }
+
+    function closeTemplateModal() {
+        document.getElementById('templateModal').style.display = 'none';
+    }
+
+    function copyTemplate() {
+        const textarea = document.getElementById('templateJson');
+        // Copy as compact JSON (single line) for game import
+        try {
+            const parsed = JSON.parse(textarea.value);
+            navigator.clipboard.writeText(JSON.stringify(parsed));
+        } catch {
+            navigator.clipboard.writeText(textarea.value);
+        }
+        const confirm = document.getElementById('copyConfirm');
+        confirm.style.display = 'inline';
+        setTimeout(() => confirm.style.display = 'none', 2000);
+    }
+
+    // Close modal on escape or background click
+    document.getElementById('templateModal').addEventListener('click', function(e) {
+        if (e.target === this) closeTemplateModal();
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeTemplateModal();
+    });
+</script>
 {% endblock %}
