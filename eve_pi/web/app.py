@@ -22,6 +22,9 @@ from eve_pi.optimizer.allocator import (
     optimize,
 )
 from eve_pi.templates.converter import convert_template
+import html
+import re
+from datetime import datetime
 
 app = FastAPI(title="EVE PI Optimizer")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
@@ -29,6 +32,12 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 # Load game data once at startup
 game_data = GameData.load()
+
+# Feedback storage
+FEEDBACK_DIR = Path(__file__).parent.parent.parent / "feedback"
+FEEDBACK_DIR.mkdir(exist_ok=True)
+
+MAX_FEEDBACK_LENGTH = 5000
 
 
 
@@ -229,6 +238,47 @@ async def convert_template_route(request: Request):
     except Exception as e:
         return JSONResponse({"error": f"Conversion failed: {str(e)}"}, status_code=500)
 
+
+
+def _sanitize(text: str, max_length: int = MAX_FEEDBACK_LENGTH) -> str:
+    """Sanitize user input: escape HTML, strip control chars, enforce length."""
+    text = text[:max_length]
+    text = html.escape(text)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
+    return text.strip()
+
+
+@app.get("/feedback", response_class=HTMLResponse)
+async def feedback_page(request: Request):
+    return _render(request, "feedback.html")
+
+
+@app.post("/feedback", response_class=HTMLResponse)
+async def submit_feedback(request: Request):
+    form = await request.form()
+    name = _sanitize(form.get("name", "Anonymous"), 100)
+    category = _sanitize(form.get("category", "general"), 50)
+    message = _sanitize(form.get("message", ""))
+
+    if not message:
+        return _render(request, "feedback.html", error="Message is required.")
+
+    # Store as JSON file with timestamp
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', name.replace(' ', '_'))[:30]
+    filename = f"{timestamp}_{safe_name}.json"
+
+    feedback = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "name": name,
+        "category": category,
+        "message": message,
+    }
+
+    with open(FEEDBACK_DIR / filename, "w", encoding="utf-8") as f:
+        json.dump(feedback, f, indent=2)
+
+    return _render(request, "feedback.html", success=True)
 
 
 if __name__ == "__main__":
