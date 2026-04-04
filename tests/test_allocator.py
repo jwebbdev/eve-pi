@@ -1,3 +1,4 @@
+from eve_pi.capacity.planet_capacity import SetupType
 from eve_pi.data.loader import GameData
 from eve_pi.models.planets import Planet, SolarSystem
 from eve_pi.models.characters import Character
@@ -76,3 +77,120 @@ def test_optimize_respects_colony_limit():
     )
     result = optimize(constraints, market, gd)
     assert len(result.assignments) <= 3
+
+
+def test_self_sufficient_uses_all_colonies():
+    """Self-sufficient mode should fill all colony slots, not stop at volume limit."""
+    gd = GameData.load()
+    # System with many planet types for diverse extraction options
+    system = SolarSystem(name="TestFill", system_id=99999, planets=[
+        Planet(planet_id=1, planet_type=gd.planet_types["Barren"], radius_km=5000.0),
+        Planet(planet_id=2, planet_type=gd.planet_types["Gas"], radius_km=5000.0),
+        Planet(planet_id=3, planet_type=gd.planet_types["Lava"], radius_km=5000.0),
+        Planet(planet_id=4, planet_type=gd.planet_types["Temperate"], radius_km=5000.0),
+        Planet(planet_id=5, planet_type=gd.planet_types["Ice"], radius_km=5000.0),
+        Planet(planet_id=6, planet_type=gd.planet_types["Storm"], radius_km=5000.0),
+    ])
+    market = _make_fake_market()
+    # Many colonies with very small hauling budget to force stockpile usage
+    characters = [Character(name="Char1", ccu_level=4, max_planets=6)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=1, cargo_capacity_m3=5000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    assert len(result.assignments) == constraints.total_colonies
+
+
+def test_self_sufficient_factory_chains():
+    """Should consider factory chains, not just standalone extraction."""
+    gd = GameData.load()
+    # System with planets that have the R0 resources for Coolant's inputs
+    # Coolant needs Electrolytes (Ionic Solutions) + Water (Aqueous Liquids)
+    # Gas has both Ionic Solutions and Aqueous Liquids
+    # Give plenty of planets and generous hauling budget
+    system = SolarSystem(name="TestChain", system_id=99998, planets=[
+        Planet(planet_id=1, planet_type=gd.planet_types["Gas"], radius_km=10000.0),
+        Planet(planet_id=2, planet_type=gd.planet_types["Gas"], radius_km=10000.0),
+        Planet(planet_id=3, planet_type=gd.planet_types["Gas"], radius_km=10000.0),
+        Planet(planet_id=4, planet_type=gd.planet_types["Gas"], radius_km=10000.0),
+        Planet(planet_id=5, planet_type=gd.planet_types["Gas"], radius_km=10000.0),
+        Planet(planet_id=6, planet_type=gd.planet_types["Barren"], radius_km=10000.0),
+        Planet(planet_id=7, planet_type=gd.planet_types["Lava"], radius_km=10000.0),
+        Planet(planet_id=8, planet_type=gd.planet_types["Temperate"], radius_km=10000.0),
+        Planet(planet_id=9, planet_type=gd.planet_types["Ice"], radius_km=10000.0),
+        Planet(planet_id=10, planet_type=gd.planet_types["Storm"], radius_km=10000.0),
+    ])
+    # Set P2 prices high to make factory chains attractive
+    market = _make_fake_market()
+    for p2_name in ["Coolant", "Construction Blocks", "Enriched Uranium",
+                     "Mechanical Parts", "Rocket Fuel", "Superconductors"]:
+        if p2_name in market:
+            market[p2_name] = MarketData(
+                type_id=0, name=p2_name, buy_price=25000,
+                sell_orders=[{"price": 23750, "volume_remain": 100000}],
+            )
+    characters = [
+        Character(name="Char1", ccu_level=4, max_planets=6),
+        Character(name="Char2", ccu_level=4, max_planets=6),
+    ]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=3, cargo_capacity_m3=60000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    factory_assignments = [a for a in result.assignments if a.setup == SetupType.P1_TO_P2]
+    assert len(factory_assignments) > 0, (
+        f"Expected factory chain assignments but got none. "
+        f"Assignments: {[(a.product, a.setup.value, a.category) for a in result.assignments]}"
+    )
+
+
+def test_self_sufficient_has_shipping_and_stockpile():
+    """Result should have both shipping and stockpile categories."""
+    gd = GameData.load()
+    system = SolarSystem(name="TestCategories", system_id=99997, planets=[
+        Planet(planet_id=1, planet_type=gd.planet_types["Barren"], radius_km=5000.0),
+        Planet(planet_id=2, planet_type=gd.planet_types["Gas"], radius_km=5000.0),
+        Planet(planet_id=3, planet_type=gd.planet_types["Lava"], radius_km=5000.0),
+        Planet(planet_id=4, planet_type=gd.planet_types["Temperate"], radius_km=5000.0),
+        Planet(planet_id=5, planet_type=gd.planet_types["Ice"], radius_km=5000.0),
+        Planet(planet_id=6, planet_type=gd.planet_types["Storm"], radius_km=5000.0),
+    ])
+    market = _make_fake_market()
+    # Budget fits ~4 R0→P2 colonies (90 m³/day × 7 = 630/wk each, budget = 3000/wk)
+    # but 12 colonies total, so rest must stockpile
+    characters = [
+        Character(name="Char1", ccu_level=4, max_planets=6),
+        Character(name="Char2", ccu_level=4, max_planets=6),
+    ]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=1, cargo_capacity_m3=3000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    assert len(result.shipped_assignments) > 0, "Expected at least one shipped assignment"
+    assert result.shipped_volume_per_week <= constraints.max_volume_per_week, (
+        f"Shipped volume {result.shipped_volume_per_week} exceeds budget {constraints.max_volume_per_week}"
+    )
+    # With only 5000 m3/week budget and 6 colonies, we should get stockpile too
+    assert len(result.stockpile_assignments) > 0, (
+        f"Expected stockpile assignments with tight volume budget. "
+        f"Assignments: {[(a.product, a.category) for a in result.assignments]}"
+    )
+
+
+def test_self_sufficient_colony_assignment_categories():
+    """ColonyAssignment should have category and feeds fields."""
+    gd = GameData.load()
+    system = _make_test_system(gd)
+    market = _make_fake_market()
+    characters = [Character(name="Char1", ccu_level=4, max_planets=6)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=2, cargo_capacity_m3=60000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    for a in result.assignments:
+        assert a.category in ("ship", "feed", "stockpile"), f"Invalid category: {a.category}"
+        assert isinstance(a.feeds, str)

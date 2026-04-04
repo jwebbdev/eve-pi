@@ -1,8 +1,19 @@
 """Output formatting for CLI results."""
-from eve_pi.optimizer.allocator import OptimizationResult
+from eve_pi.optimizer.allocator import OptimizationConstraints, OptimizationResult
 
 
-def format_result(result: OptimizationResult) -> str:
+def format_result(result: OptimizationResult, constraints: OptimizationConstraints = None) -> str:
+    """Format optimization result for display.
+
+    If constraints are provided and mode is self_sufficient, uses the new
+    shipping plan + stockpile format. Otherwise falls back to the original format.
+    """
+    if constraints and constraints.mode == "self_sufficient":
+        return _format_self_sufficient(result, constraints)
+    return _format_default(result)
+
+
+def _format_default(result: OptimizationResult) -> str:
     lines = []
     lines.append("=" * 80)
     lines.append("OPTIMIZATION RESULT")
@@ -23,4 +34,77 @@ def format_result(result: OptimizationResult) -> str:
             f"{a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
         )
     lines.append("-" * 80)
+    return "\n".join(lines)
+
+
+def _format_self_sufficient(result: OptimizationResult, constraints: OptimizationConstraints) -> str:
+    lines = []
+    lines.append("=" * 80)
+    lines.append("OPTIMIZATION RESULT -- Self-Sufficient")
+    lines.append("=" * 80)
+    lines.append("")
+
+    # Shipping plan section
+    trips = constraints.hauling_trips_per_week
+    cargo = constraints.cargo_capacity_m3
+    max_vol_week = constraints.max_volume_per_week
+    lines.append(
+        f"SHIPPING PLAN ({trips} trips/week x {cargo:,.0f} m3 = {max_vol_week:,.0f} m3/week):"
+    )
+    lines.append(f"  Shipped ISK/week:  {result.shipped_isk_per_week:>15,.0f}")
+    lines.append(f"  Shipped volume/week: {result.shipped_volume_per_week:>12,.0f} m3")
+    lines.append("")
+
+    # Build grouped display: factory chains show feeders indented beneath
+    shipped = result.shipped_assignments
+    feed = result.feed_assignments
+
+    # Group feed assignments by their factory product
+    feed_by_factory: dict = {}
+    for a in feed:
+        # Extract factory product from feeds field "-> Coolant factory"
+        factory_product = a.feeds.replace("-> ", "").replace(" factory", "") if a.feeds else ""
+        if factory_product not in feed_by_factory:
+            feed_by_factory[factory_product] = []
+        feed_by_factory[factory_product].append(a)
+
+    if shipped:
+        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'ISK/day':>12} {'m3/day':>8}")
+        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------':>12} {'------':>8}")
+        idx = 0
+        for a in shipped:
+            idx += 1
+            lines.append(
+                f"  {idx:<3} {a.product:<20} {a.setup.value:<12} {a.planet_type:<10} "
+                f"{a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
+            )
+            # Show feeders for this factory
+            feeders = feed_by_factory.get(a.product, [])
+            for fa in feeders:
+                lines.append(
+                    f"      -> {fa.product:<18} {fa.setup.value:<12} {fa.planet_type:<10} "
+                    f"{'':>12} {'[feed]':>8}"
+                )
+    lines.append("")
+
+    # Stockpile section
+    stockpile = result.stockpile_assignments
+    if stockpile:
+        lines.append("STOCKPILE (produce locally, export when convenient):")
+        lines.append(f"  Stockpile ISK/week: {result.stockpile_isk_per_day * 7:>14,.0f}")
+        lines.append("")
+        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'ISK/day':>12} {'m3/day':>8}")
+        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------':>12} {'------':>8}")
+        for i, a in enumerate(stockpile, 1):
+            lines.append(
+                f"  {i:<3} {a.product:<20} {a.setup.value:<12} {a.planet_type:<10} "
+                f"{a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
+            )
+        lines.append("")
+
+    lines.append(
+        f"TOTAL: {len(result.assignments)} colonies, "
+        f"{result.total_isk_per_week:,.0f} ISK/week potential"
+    )
+
     return "\n".join(lines)
