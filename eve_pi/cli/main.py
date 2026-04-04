@@ -9,14 +9,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     opt_parser = subparsers.add_parser("optimize", help="Optimize colony allocation")
     opt_parser.add_argument("--system", required=True, help="System name (e.g., J153003)")
-    opt_parser.add_argument("--characters", type=int, default=1, help="Number of characters")
-    opt_parser.add_argument("--ccu-level", type=int, default=4, help="Command Center Upgrades level (0-5)")
+    opt_parser.add_argument("--characters", type=str, default="1",
+                            help="Character specs. Examples: '6', 'Alice,Bob', 'Alice:5,Bob:4' (name:ccu), "
+                            "'Alice:5:6,Bob:4:5' (name:ccu:planets)")
+    opt_parser.add_argument("--ccu-level", type=int, default=5,
+                            help="Default Command Center Upgrades level (0-5), used when not specified per character")
+    opt_parser.add_argument("--max-planets", type=int, default=6,
+                            help="Default max planets per character (Interplanetary Consolidation, 1-6)")
     opt_parser.add_argument("--cycle-days", type=float, default=4.0, help="Extractor restart cadence in days")
     opt_parser.add_argument("--trips-per-week", type=int, default=2, help="Hauling trips per week")
     opt_parser.add_argument("--cargo-m3", type=float, default=60000.0, help="Cargo capacity in m3")
     opt_parser.add_argument("--mode", choices=["self_sufficient", "import", "hybrid"], default="self_sufficient")
     opt_parser.add_argument("--tax-rate", type=float, default=0.05, help="POCO tax rate")
-    opt_parser.add_argument("--max-planets", type=int, default=6, help="Max planets per character")
 
     tpl_parser = subparsers.add_parser("template", help="Generate or convert templates")
     tpl_parser.add_argument("--planet-type", help="Planet type (e.g., Gas)")
