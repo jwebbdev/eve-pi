@@ -48,4 +48,4 @@ def run_optimize(args):
         cargo_capacity_m3=args.cargo_m3, tax_rate=args.tax_rate,
     )
     result = optimize(constraints, market, gd)
-    print(format_result(result))
+    print(format_result(result, constraints))
