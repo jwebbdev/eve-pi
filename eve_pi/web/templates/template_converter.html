@@ -124,7 +124,15 @@
 
     function copyResult() {
         const jsonPre = document.getElementById('resultJson');
-        const text = jsonPre.textContent;
+        // Compact single-line JSON with Diam as float
+        let text;
+        try {
+            const parsed = JSON.parse(jsonPre.textContent);
+            text = JSON.stringify(parsed);
+            text = text.replace(/"Diam":(\d+)([,}])/, '"Diam":$1.0$2');
+        } catch {
+            text = jsonPre.textContent;
+        }
         navigator.clipboard.writeText(text).then(() => {
             const btn = event.target;
             const original = btn.textContent;

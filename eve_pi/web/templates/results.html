@@ -220,10 +220,14 @@
 
     function copyTemplate() {
         const textarea = document.getElementById('templateJson');
-        // Copy as compact JSON (single line) for game import
+        // Copy as compact single-line JSON for game import
+        // Ensure Diam stays as float (JS drops .0, EVE requires it)
         try {
             const parsed = JSON.parse(textarea.value);
-            navigator.clipboard.writeText(JSON.stringify(parsed));
+            let compact = JSON.stringify(parsed);
+            // Fix Diam to always have .0 suffix if it's a whole number
+            compact = compact.replace(/"Diam":(\d+)([,}])/, '"Diam":$1.0$2');
+            navigator.clipboard.writeText(compact);
         } catch {
             navigator.clipboard.writeText(textarea.value);
         }
