@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Results - EVE PI Optimizer{% endblock %}
+
+{% block content %}
+<h2>Optimization Results &mdash; {{ constraints.system.name }}</h2>
+
+<div class="summary-grid">
+    <div class="summary-card">
+        <div class="value">{{ "{:,.0f}".format(result.total_isk_per_week) }}</div>
+        <div class="label">ISK / Week (Potential)</div>
+    </div>
+    <div class="summary-card">
+        <div class="value">{{ "{:,.0f}".format(result.shipped_isk_per_week) }}</div>
+        <div class="label">Shipped ISK / Week</div>
+    </div>
+    <div class="summary-card">
+        <div class="value">{{ "{:,.0f}".format(result.shipped_volume_per_week) }}</div>
+        <div class="label">Shipped m3 / Week</div>
+    </div>
+    <div class="summary-card">
+        <div class="value">{{ result.assignments|length }}</div>
+        <div class="label">Colonies</div>
+    </div>
+    <div class="summary-card">
+        <div class="value">{{ constraints.characters|length }}</div>
+        <div class="label">Characters</div>
+    </div>
+    <div class="summary-card">
+        <div class="value">{{ constraints.mode }}</div>
+        <div class="label">Mode</div>
+    </div>
+</div>
+
+{% set manufacturing = result.manufacturing_assignments %}
+{% if manufacturing or constraints.manufacturing_needs %}
+<div class="panel">
+    <div class="panel-header">Manufacturing (internal use, not exported)</div>
+    {% if manufacturing %}
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Setup</th>
+                <th>Planet</th>
+                <th>Character</th>
+                <th class="right">ISK/Day</th>
+                <th class="right">Units/Week</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in manufacturing %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ a.product }}</td>
+                <td>{{ a.setup.value }}</td>
+                <td>{{ a.planet_type }}</td>
+                <td>{{ a.character }}</td>
+                <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
+                <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day * 7) }}</td>
+            </tr>
+            {% set feeders = feed_by_factory.get(a.product, []) %}
+            {% for fa in feeders %}
+            <tr class="feed-row">
+                <td></td>
+                <td>&nbsp;&nbsp;&rarr; {{ fa.product }}</td>
+                <td>{{ fa.setup.value }}</td>
+                <td>{{ fa.planet_type }}</td>
+                <td>{{ fa.character }}</td>
+                <td class="right"></td>
+                <td class="right">[feed]</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #ef5350; padding: 10px;">Could not allocate manufacturing needs. Check planet availability.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% set shipped = result.shipped_assignments %}
+{% if shipped %}
+<div class="panel">
+    <div class="panel-header">
+        Shipping Plan
+        ({{ constraints.hauling_trips_per_week }} trips/week
+        &times; {{ "{:,.0f}".format(constraints.cargo_capacity_m3) }} m3
+        = {{ "{:,.0f}".format(constraints.max_volume_per_week) }} m3/week)
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Setup</th>
+                <th>Planet</th>
+                <th>Character</th>
+                <th class="right">ISK/Day</th>
+                <th class="right">m3/Day</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in shipped %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ a.product }}</td>
+                <td>{{ a.setup.value }}</td>
+                <td>{{ a.planet_type }}</td>
+                <td>{{ a.character }}</td>
+                <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
+                <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
+            </tr>
+            {% set feeders = feed_by_factory.get(a.product, []) %}
+            {% for fa in feeders %}
+            <tr class="feed-row">
+                <td></td>
+                <td>&nbsp;&nbsp;&rarr; {{ fa.product }}</td>
+                <td>{{ fa.setup.value }}</td>
+                <td>{{ fa.planet_type }}</td>
+                <td>{{ fa.character }}</td>
+                <td class="right"></td>
+                <td class="right">[feed]</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% set stockpile = result.stockpile_assignments %}
+{% if stockpile %}
+<div class="panel">
+    <div class="panel-header">
+        Stockpile (produce locally, export when convenient)
+        &mdash; {{ "{:,.0f}".format(result.stockpile_isk_per_day * 7) }} ISK/week
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Setup</th>
+                <th>Planet</th>
+                <th>Character</th>
+                <th class="right">ISK/Day</th>
+                <th class="right">m3/Day</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in stockpile %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ a.product }}</td>
+                <td>{{ a.setup.value }}</td>
+                <td>{{ a.planet_type }}</td>
+                <td>{{ a.character }}</td>
+                <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
+                <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="/" class="btn">&larr; Back to Optimizer</a>
+</div>
+{% endblock %}

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}EVE PI Optimizer{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="error-box">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/optimize" id="optimizerForm">
+    <div class="panel">
+        <div class="panel-header">System &amp; Settings</div>
+
+        <div class="form-row">
+            <div>
+                <label for="system">Solar System</label>
+                <input type="text" id="system" name="system" placeholder="e.g. Jita"
+                       value="{{ form_values.system if form_values else '' }}" required>
+            </div>
+            <div class="narrow">
+                <label for="cycle_days">Cycle Days</label>
+                <input type="number" id="cycle_days" name="cycle_days" step="0.5" min="0.5" max="30"
+                       value="{{ form_values.cycle_days if form_values else '4' }}">
+            </div>
+            <div class="narrow">
+                <label for="trips_per_week">Trips/Week</label>
+                <input type="number" id="trips_per_week" name="trips_per_week" min="1" max="14"
+                       value="{{ form_values.trips_per_week if form_values else '2' }}">
+            </div>
+            <div class="narrow">
+                <label for="cargo_m3">Cargo m3</label>
+                <input type="number" id="cargo_m3" name="cargo_m3" min="1000" step="1000"
+                       value="{{ form_values.cargo_m3|int if form_values else '60000' }}">
+            </div>
+            <div class="narrow">
+                <label for="tax_rate">Tax Rate</label>
+                <input type="number" id="tax_rate" name="tax_rate" step="0.01" min="0" max="1"
+                       value="{{ form_values.tax_rate if form_values else '0.05' }}">
+            </div>
+        </div>
+
+        <label>Mode</label>
+        <div class="radio-group">
+            <label>
+                <input type="radio" name="mode" value="self_sufficient"
+                       {{ 'checked' if not form_values or form_values.mode == 'self_sufficient' }}>
+                Self-Sufficient
+            </label>
+            <label>
+                <input type="radio" name="mode" value="import"
+                       {{ 'checked' if form_values and form_values.mode == 'import' }}>
+                Import
+            </label>
+            <label>
+                <input type="radio" name="mode" value="hybrid"
+                       {{ 'checked' if form_values and form_values.mode == 'hybrid' }}>
+                Hybrid
+            </label>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">Characters</div>
+        <div id="characters" class="dynamic-section">
+            {% if form_values and form_values.characters %}
+                {% for char in form_values.characters %}
+                <div class="dynamic-item" data-type="character">
+                    <div>
+                        <label>Name</label>
+                        <input type="text" name="char_name" value="{{ char.name }}" placeholder="Character name">
+                    </div>
+                    <div class="narrow">
+                        <label>CCU Level</label>
+                        <select name="char_ccu">
+                            {% for lvl in range(6) %}
+                            <option value="{{ lvl }}" {{ 'selected' if char.ccu_level == lvl }}>{{ lvl }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="narrow">
+                        <label>Max Planets</label>
+                        <select name="char_max_planets">
+                            {% for p in range(1, 7) %}
+                            <option value="{{ p }}" {{ 'selected' if char.max_planets == p }}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="action">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="dynamic-item" data-type="character">
+                    <div>
+                        <label>Name</label>
+                        <input type="text" name="char_name" value="Char1" placeholder="Character name">
+                    </div>
+                    <div class="narrow">
+                        <label>CCU Level</label>
+                        <select name="char_ccu">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5" selected>5</option>
+                        </select>
+                    </div>
+                    <div class="narrow">
+                        <label>Max Planets</label>
+                        <select name="char_max_planets">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6" selected>6</option>
+                        </select>
+                    </div>
+                    <div class="action">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <button type="button" class="btn btn-sm" onclick="addCharacter()">+ Add Character</button>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">Manufacturing Needs (Optional)</div>
+        <div id="manufacturing" class="dynamic-section">
+            {% if form_values and form_values.manufacturing_needs %}
+                {% for need in form_values.manufacturing_needs %}
+                <div class="dynamic-item" data-type="manufacturing">
+                    <div>
+                        <label>Product</label>
+                        <select name="mfg_product">
+                            <option value="">-- Select Product --</option>
+                            {% for tier in ['p1', 'p2', 'p3', 'p4'] %}
+                            <optgroup label="{{ tier|upper }}">
+                                {% for prod in products_by_tier[tier] %}
+                                <option value="{{ prod }}" {{ 'selected' if need.product == prod }}>{{ prod }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="narrow">
+                        <label>Qty/Week</label>
+                        <input type="number" name="mfg_quantity" min="1" value="{{ need.quantity_per_week }}">
+                    </div>
+                    <div class="action">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        <button type="button" class="btn btn-sm" onclick="addManufacturing()">+ Add Requirement</button>
+    </div>
+
+    <button type="submit" class="btn btn-success" id="submitBtn">Run Optimizer</button>
+</form>
+
+<div class="processing-overlay" id="processingOverlay">
+    <div class="processing-spinner"></div>
+    <div class="processing-text">Optimizing...</div>
+    <div class="processing-subtext">Fetching market data and running optimizer. This may take 30-60 seconds.</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Product options HTML for manufacturing dropdowns
+    const productOptionsHTML = `
+        <option value="">-- Select Product --</option>
+        {% for tier in ['p1', 'p2', 'p3', 'p4'] %}
+        <optgroup label="{{ tier|upper }}">
+            {% for prod in products_by_tier[tier] %}
+            <option value="{{ prod }}">{{ prod }}</option>
+            {% endfor %}
+        </optgroup>
+        {% endfor %}
+    `;
+
+    let charCount = document.querySelectorAll('#characters .dynamic-item').length;
+
+    function addCharacter() {
+        charCount++;
+        const container = document.getElementById('characters');
+        const div = document.createElement('div');
+        div.className = 'dynamic-item';
+        div.setAttribute('data-type', 'character');
+        div.innerHTML = `
+            <div>
+                <label>Name</label>
+                <input type="text" name="char_name" value="Char${charCount}" placeholder="Character name">
+            </div>
+            <div class="narrow">
+                <label>CCU Level</label>
+                <select name="char_ccu">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5" selected>5</option>
+                </select>
+            </div>
+            <div class="narrow">
+                <label>Max Planets</label>
+                <select name="char_max_planets">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6" selected>6</option>
+                </select>
+            </div>
+            <div class="action">
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    function addManufacturing() {
+        const container = document.getElementById('manufacturing');
+        const div = document.createElement('div');
+        div.className = 'dynamic-item';
+        div.setAttribute('data-type', 'manufacturing');
+        div.innerHTML = `
+            <div>
+                <label>Product</label>
+                <select name="mfg_product">
+                    ${productOptionsHTML}
+                </select>
+            </div>
+            <div class="narrow">
+                <label>Qty/Week</label>
+                <input type="number" name="mfg_quantity" min="1" value="100">
+            </div>
+            <div class="action">
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+            </div>
+        `;
+        container.appendChild(div);
+    }
+
+    function removeItem(btn) {
+        const item = btn.closest('.dynamic-item');
+        const container = item.parentElement;
+        if (container.querySelectorAll('.dynamic-item').length > 1 || item.getAttribute('data-type') === 'manufacturing') {
+            item.remove();
+        }
+    }
+
+    // Show processing overlay on form submit
+    document.getElementById('optimizerForm').addEventListener('submit', function() {
+        document.getElementById('processingOverlay').classList.add('active');
+    });
+</script>
+{% endblock %}
