@@ -257,10 +257,10 @@ def test_self_sufficient_p2_to_p3_chains():
     market = _make_fake_market()
     for p3_name in ["Robotics", "Guidance Systems"]:
         market[p3_name] = MarketData(
-            type_id=0, name=p3_name, buy_price=100000,
-            sell_orders=[{"price": 95000, "volume_remain": 100000}],
+            type_id=0, name=p3_name, buy_price=200000,
+            sell_orders=[{"price": 190000, "volume_remain": 100000}],
         )
-    characters = [Character(name=f"Char{i}", ccu_level=4, max_planets=6) for i in range(6)]
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(10)]
     constraints = OptimizationConstraints(
         system=system, characters=characters, mode="self_sufficient",
         cycle_days=4.0, hauling_trips_per_week=2, cargo_capacity_m3=60000, tax_rate=0.05,

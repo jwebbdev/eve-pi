@@ -129,6 +129,12 @@ def _fit_extraction(remaining_cpu, remaining_power, link_power_per_factory,
 
     cost_per_factory_cpu = basic.cpu_tf + link_cpu_per_factory
     cost_per_factory_power = basic.power_mw + link_power_per_factory
+
+    # Find the heads/factories split that maximizes output.
+    # Each head extracts ~6,000 R0/hr at peak, each basic factory consumes 6,000 R0/hr.
+    # With longer extraction cycles (e.g., 4 days), decay reduces effective R0/hr,
+    # so we want MORE heads than factories to compensate.
+    # Rule of thumb: target ~2 heads per factory to handle decay.
     best_factories = 0
     best_heads = 0
     for heads in range(1, 11):
@@ -140,8 +146,12 @@ def _fit_extraction(remaining_cpu, remaining_power, link_power_per_factory,
             break
         max_by_cpu = int(factory_cpu / cost_per_factory_cpu)
         max_by_power = int(factory_power / cost_per_factory_power)
-        factories = min(max_by_cpu, max_by_power)
-        if factories > best_factories or (factories == best_factories and heads > best_heads):
+        # Cap factories: no more than heads (even with perfect extraction,
+        # 1 head can only feed ~1 factory). Prefer extra heads for decay buffer.
+        factories = min(max_by_cpu, max_by_power, heads)
+
+        # Best = most factories that are actually fed
+        if factories > best_factories:
             best_factories = factories
             best_heads = heads
     details["basic_factories"] = best_factories
@@ -171,8 +181,12 @@ def _fit_r0_to_p2(remaining_cpu, remaining_power, link_power_per_factory,
     cost_per_basic_power = basic.power_mw + link_power_per_factory
     best_basics = 0
     best_heads = 0
-    # Total heads split across 2 ECUs
-    for heads in range(2, 21):  # 2-20 total heads (1-10 per ECU)
+    # Total heads split across 2 ECUs (1-10 per ECU)
+    # Each basic factory needs ~1 head worth of R0, and basics are split
+    # between 2 P1 types, so cap basics at total heads
+    for heads in range(2, 21):
+        if heads > 20:  # max 10 per ECU
+            break
         head_cpu = head.cpu_tf * heads
         head_power = head.power_mw * heads
         factory_cpu = remaining_cpu - head_cpu
@@ -181,8 +195,8 @@ def _fit_r0_to_p2(remaining_cpu, remaining_power, link_power_per_factory,
             break
         max_by_cpu = int(factory_cpu / cost_per_basic_cpu)
         max_by_power = int(factory_power / cost_per_basic_power)
-        basics = min(max_by_cpu, max_by_power)
-        if basics >= 2 and (basics > best_basics or (basics == best_basics and heads > best_heads)):
+        basics = min(max_by_cpu, max_by_power, heads)  # cap at heads
+        if basics >= 2 and basics > best_basics:
             best_basics = basics
             best_heads = heads
     details["advanced_factories"] = 1
