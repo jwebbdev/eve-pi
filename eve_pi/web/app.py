@@ -264,9 +264,9 @@ def _find_reference_template(product: str, setup_value: str) -> Optional[dict]:
                     return json.load(f)
         return None
 
-    # R0→P2 is a hybrid setup — no reference templates available
+    # R0→P2: generate programmatically
     if setup_value == "r0_to_p2":
-        return None
+        return None  # handled separately in generate_template()
 
     # For factories (p1_to_p2, p2_to_p3, p3_to_p4), look for Factory templates
     path = REFERENCE_TEMPLATES_DIR / f"Factory - {product}.json"
@@ -276,20 +276,102 @@ def _find_reference_template(product: str, setup_value: str) -> Optional[dict]:
     return None
 
 
+def _generate_r0_to_p2_template(planet_type_name: str, p2_product: str) -> dict:
+    """Generate an R0->P2 template: 2 ECUs + 8 basic + 1 advanced + storage + launchpad."""
+    pt = game_data.planet_types[planet_type_name]
+    p2_recipe = game_data.get_recipe("p1_to_p2", p2_product)
+    if not p2_recipe:
+        return None
+
+    p1_a_name = p2_recipe.inputs[0][0]
+    p1_b_name = p2_recipe.inputs[1][0]
+    r0_a_name = game_data.r0_for_p1(p1_a_name)
+    r0_b_name = game_data.r0_for_p1(p1_b_name)
+    if not r0_a_name or not r0_b_name:
+        return None
+
+    p2_id = game_data.materials[p2_product].type_id
+    p1_a_id = game_data.materials[p1_a_name].type_id
+    p1_b_id = game_data.materials[p1_b_name].type_id
+    r0_a_id = game_data.materials[r0_a_name].type_id
+    r0_b_id = game_data.materials[r0_b_name].type_id
+
+    step = 0.01323  # angular step for tight placement (~60km on 5000km planet)
+    cx, cy = 1.5, 3.0
+
+    return {
+        "CmdCtrLv": 5,
+        "Cmt": f"R0-P2 {p2_product} on {planet_type_name}",
+        "Diam": 10000.0,
+        "L": [
+            {"D": 2, "Lv": 0, "S": 1},   # LP -> Storage
+            {"D": 3, "Lv": 0, "S": 1},   # LP -> Advanced
+            {"D": 4, "Lv": 0, "S": 1},   # LP -> Basic A1
+            {"D": 5, "Lv": 0, "S": 2},   # Storage -> Basic A2
+            {"D": 6, "Lv": 0, "S": 1},   # LP -> Basic A3
+            {"D": 7, "Lv": 0, "S": 2},   # Storage -> Basic A4
+            {"D": 8, "Lv": 0, "S": 1},   # LP -> Basic B1
+            {"D": 9, "Lv": 0, "S": 2},   # Storage -> Basic B2
+            {"D": 10, "Lv": 0, "S": 1},  # LP -> Basic B3
+            {"D": 11, "Lv": 0, "S": 2},  # Storage -> Basic B4
+            {"D": 12, "Lv": 0, "S": 2},  # Storage -> ECU-A
+            {"D": 13, "Lv": 0, "S": 2},  # Storage -> ECU-B
+        ],
+        "P": [
+            {"H": 0, "La": cx, "Lo": cy, "S": None, "T": pt.structures["launchpad"]},
+            {"H": 0, "La": round(cx+step, 5), "Lo": cy, "S": None, "T": pt.structures["storage"]},
+            {"H": 0, "La": round(cx-step, 5), "Lo": cy, "S": p2_id, "T": pt.structures["advanced_factory"]},
+            {"H": 0, "La": cx, "Lo": round(cy+step, 5), "S": p1_a_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx+step, 5), "Lo": round(cy+step, 5), "S": p1_a_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx-step, 5), "Lo": round(cy+step, 5), "S": p1_a_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx+step*2, 5), "Lo": round(cy+step, 5), "S": p1_a_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": cx, "Lo": round(cy-step, 5), "S": p1_b_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx+step, 5), "Lo": round(cy-step, 5), "S": p1_b_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx-step, 5), "Lo": round(cy-step, 5), "S": p1_b_id, "T": pt.structures["basic_factory"]},
+            {"H": 0, "La": round(cx+step*2, 5), "Lo": round(cy-step, 5), "S": p1_b_id, "T": pt.structures["basic_factory"]},
+            {"H": 4, "La": round(cx+step*2, 5), "Lo": cy, "S": r0_a_id, "T": pt.structures["extractor"]},
+            {"H": 4, "La": round(cx-step*2, 5), "Lo": cy, "S": r0_b_id, "T": pt.structures["extractor"]},
+        ],
+        "Pln": pt.type_id,
+        "R": [
+            {"P": [2, 1, 4], "Q": 3000, "T": r0_a_id},
+            {"P": [2, 5], "Q": 3000, "T": r0_a_id},
+            {"P": [2, 1, 6], "Q": 3000, "T": r0_a_id},
+            {"P": [2, 7], "Q": 3000, "T": r0_a_id},
+            {"P": [2, 1, 8], "Q": 3000, "T": r0_b_id},
+            {"P": [2, 9], "Q": 3000, "T": r0_b_id},
+            {"P": [2, 1, 10], "Q": 3000, "T": r0_b_id},
+            {"P": [2, 11], "Q": 3000, "T": r0_b_id},
+            {"P": [4, 1, 3], "Q": 20, "T": p1_a_id},
+            {"P": [5, 2, 1, 3], "Q": 20, "T": p1_a_id},
+            {"P": [6, 1, 3], "Q": 20, "T": p1_a_id},
+            {"P": [7, 2, 1, 3], "Q": 20, "T": p1_a_id},
+            {"P": [8, 1, 3], "Q": 20, "T": p1_b_id},
+            {"P": [9, 2, 1, 3], "Q": 20, "T": p1_b_id},
+            {"P": [10, 1, 3], "Q": 20, "T": p1_b_id},
+            {"P": [11, 2, 1, 3], "Q": 20, "T": p1_b_id},
+            {"P": [3, 1], "Q": 5, "T": p2_id},
+            {"P": [12, 2], "Q": 3000, "T": r0_a_id},
+            {"P": [13, 2], "Q": 3000, "T": r0_b_id},
+        ],
+    }
+
+
 @app.get("/api/template/{setup}/{planet_type}/{product}", response_class=JSONResponse)
 async def generate_template(setup: str, planet_type: str, product: str):
     """Generate an importable template for a specific setup."""
+    # R0->P2: generate programmatically
+    if setup == "r0_to_p2":
+        template = _generate_r0_to_p2_template(planet_type, product)
+        if not template:
+            return JSONResponse({"error": f"Cannot generate R0->P2 template for {product} on {planet_type}"}, status_code=404)
+        return JSONResponse({"template": template})
+
     ref = _find_reference_template(product, setup)
     if not ref:
         return JSONResponse({"error": f"No reference template found for {product}"}, status_code=404)
 
-    # Convert to the target planet type (product already matches for factories)
-    if setup == "r0_to_p1":
-        # Miner templates are already for the right product, just need planet type swap
-        converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
-    else:
-        # Factory templates — convert planet type (product already correct in reference)
-        converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
+    converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
 
     # Ensure Diam is float (game requires it)
     if "Diam" in converted:
