@@ -235,3 +235,38 @@ def test_self_sufficient_respects_planet_slots():
         len(system.planets) * num_characters,
     )
     assert len(result.assignments) <= max_possible
+
+
+def test_self_sufficient_p2_to_p3_chains():
+    """Should build P2->P3 chains when profitable."""
+    gd = GameData.load()
+    # Need a system with enough planet diversity for a full P3 chain
+    system = SolarSystem(name="TestP3", system_id=99985, planets=[
+        # Need planets that can produce both P1 inputs for at least one P2,
+        # and a P2 that feeds into a P3 recipe
+        Planet(planet_id=i, planet_type=gd.planet_types[pt], radius_km=5000.0)
+        for i, pt in enumerate([
+            "Gas", "Gas", "Gas", "Gas", "Gas",  # Ionic Solutions, Reactive Gas, Noble Gas, etc.
+            "Lava", "Lava", "Lava",  # Felsic Magma, Non-CS Crystals, etc.
+            "Barren", "Barren",  # factory planets
+            "Temperate", "Temperate",
+            "Plasma", "Plasma",
+        ], start=1)
+    ])
+    # Set P3 prices very high to make chains attractive
+    market = _make_fake_market()
+    for p3_name in ["Robotics", "Guidance Systems"]:
+        market[p3_name] = MarketData(
+            type_id=0, name=p3_name, buy_price=100000,
+            sell_orders=[{"price": 95000, "volume_remain": 100000}],
+        )
+    characters = [Character(name=f"Char{i}", ccu_level=4, max_planets=6) for i in range(6)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=2, cargo_capacity_m3=60000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    p3_assignments = [a for a in result.assignments if a.setup == SetupType.P2_TO_P3]
+    assert len(p3_assignments) > 0, (
+        f"Expected P2->P3 chain but got: {[(a.product, a.setup.value) for a in result.assignments if a.category == 'ship']}"
+    )

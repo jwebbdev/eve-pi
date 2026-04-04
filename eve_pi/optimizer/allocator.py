@@ -213,7 +213,8 @@ class _ProductionUnit:
     product: str = ""
     # Setup type
     setup: SetupType = SetupType.R0_TO_P1
-    # For chains: list of (p1_name, colonies_needed, best_extraction_option) per input
+    # For chains: list of (material_name, colonies_needed, scored_option, setup_type) per input
+    # setup_type: SetupType.R0_TO_P1 for extraction feeders, SetupType.P1_TO_P2 for intermediate factories
     feeder_details: List[Tuple] = field(default_factory=list)
 
 
@@ -332,7 +333,7 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
             colonies_needed = max(1, colonies_needed)
 
             total_feeder_colonies += colonies_needed
-            feeder_details.append((input_name, colonies_needed, ext_opt))
+            feeder_details.append((input_name, colonies_needed, ext_opt, SetupType.R0_TO_P1))
             feeder_options_list.append(ext_opt)
 
         if not feasible:
@@ -352,6 +353,321 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
             isk_per_m3=isk_per_m3,
             product=s.option.product,
             setup=s.option.setup,
+            feeder_details=feeder_details,
+        )
+        units.append(unit)
+
+    # Step 3: P2->P3 factory chains
+    # A P2->P3 chain: 1 P2->P3 factory + N P1->P2 intermediate factories + M extraction colonies
+    p2_to_p3_factory_options: Dict[str, FeasibleOption] = {}
+    for opt in matrix:
+        if opt.setup == SetupType.P2_TO_P3:
+            if opt.product not in p2_to_p3_factory_options or opt.max_factories > p2_to_p3_factory_options[opt.product].max_factories:
+                p2_to_p3_factory_options[opt.product] = opt
+
+    # Index: best P1->P2 factory option per P2 product (for intermediate factories)
+    p1_to_p2_factory_by_product: Dict[str, FeasibleOption] = {}
+    for opt in matrix:
+        if opt.setup == SetupType.P1_TO_P2:
+            if opt.product not in p1_to_p2_factory_by_product or opt.max_factories > p1_to_p2_factory_by_product[opt.product].max_factories:
+                p1_to_p2_factory_by_product[opt.product] = opt
+
+    for p3_product, p3_opt in p2_to_p3_factory_options.items():
+        p3_scored = ScoredOption(option=p3_opt, isk_per_day=0.0, isk_per_colony=0.0,
+                                 volume_per_day=p3_opt.output_volume_per_day)
+        p3_recipe = game_data.get_recipe("p2_to_p3", p3_product)
+        if not p3_recipe:
+            continue
+        output_mkt = market_data.get(p3_product)
+        if not output_mkt or output_mkt.buy_price <= 0:
+            continue
+
+        num_p3_factories = p3_opt.max_factories
+        p3_output_per_hour = p3_recipe.output_per_hour * num_p3_factories
+        daily_output = p3_output_per_hour * 24
+        revenue = daily_output * output_mkt.buy_price
+        export_tax = revenue * constraints.tax_rate
+        chain_isk = revenue - export_tax
+        if chain_isk <= 0:
+            continue
+
+        p3_mat = game_data.materials.get(p3_product)
+        vol_per_unit = p3_mat.volume_m3 if p3_mat else 1.5
+        chain_volume = daily_output * vol_per_unit
+
+        # For each P2 input the P3 recipe needs, figure out intermediate P1->P2 factories
+        # and their extraction feeder colonies
+        feeder_details = []
+        total_feeder_colonies = 0
+        feasible = True
+        feeder_options_list = []
+
+        for p2_input_name, p2_qty_per_cycle in p3_recipe.inputs:
+            # P2 demand from the P3 factory
+            p2_per_hour = p2_qty_per_cycle * (3600 / p3_recipe.cycle_seconds) * num_p3_factories
+
+            # Find the best P1->P2 factory option for this P2
+            p2_factory_opt = p1_to_p2_factory_by_product.get(p2_input_name)
+            if not p2_factory_opt:
+                feasible = False
+                break
+
+            # How much P2/hr does one P1->P2 colony produce?
+            p2_recipe = game_data.get_recipe("p1_to_p2", p2_input_name)
+            if not p2_recipe:
+                feasible = False
+                break
+            p2_per_hour_per_colony = p2_recipe.output_per_hour * p2_factory_opt.max_factories
+
+            # How many P1->P2 colonies needed to supply this P2 input?
+            p2_colonies_needed = math.ceil(p2_per_hour / p2_per_hour_per_colony)
+            p2_colonies_needed = max(1, p2_colonies_needed)
+
+            # Create a scored option wrapper for the P1->P2 intermediate factory
+            p2_factory_scored = ScoredOption(
+                option=p2_factory_opt, isk_per_day=0.0, isk_per_colony=0.0,
+                volume_per_day=p2_factory_opt.output_volume_per_day,
+            )
+            feeder_details.append((p2_input_name, p2_colonies_needed, p2_factory_scored, SetupType.P1_TO_P2))
+            feeder_options_list.append(p2_factory_scored)
+            total_feeder_colonies += p2_colonies_needed
+
+            # Now figure out extraction feeders for each P1 input of this P2 recipe
+            for p1_input_name, p1_qty_per_cycle in p2_recipe.inputs:
+                # Total P1 demand across all P1->P2 colonies for this P2 input
+                p1_per_hour = p1_qty_per_cycle * (3600 / p2_recipe.cycle_seconds) * p2_factory_opt.max_factories * p2_colonies_needed
+
+                r0_name = game_data.r0_for_p1(p1_input_name)
+                if not r0_name:
+                    feasible = False
+                    break
+                planet_types_for_r0 = game_data.planet_types_for_r0(r0_name)
+                if not any(pt in system_planet_type_names for pt in planet_types_for_r0):
+                    feasible = False
+                    break
+
+                ext_opt = extraction_by_p1.get(p1_input_name)
+                if not ext_opt:
+                    feasible = False
+                    break
+
+                p1_per_hour_per_colony = _calc_extraction_p1_per_hour(ext_opt, game_data, constraints.cycle_days)
+                if p1_per_hour_per_colony <= 0:
+                    feasible = False
+                    break
+                ext_colonies_needed = math.ceil(p1_per_hour / p1_per_hour_per_colony)
+                ext_colonies_needed = max(1, ext_colonies_needed)
+
+                feeder_details.append((p1_input_name, ext_colonies_needed, ext_opt, SetupType.R0_TO_P1))
+                feeder_options_list.append(ext_opt)
+                total_feeder_colonies += ext_colonies_needed
+
+            if not feasible:
+                break
+
+        if not feasible:
+            continue
+
+        total_colonies = 1 + total_feeder_colonies
+        isk_per_m3 = chain_isk / chain_volume if chain_volume > 0 else 0.0
+
+        unit = _ProductionUnit(
+            kind="chain",
+            factory_option=p3_scored,
+            feeder_options=feeder_options_list,
+            feeder_colony_count=total_feeder_colonies,
+            total_colonies=total_colonies,
+            isk_per_day=chain_isk,
+            volume_per_day=chain_volume,
+            isk_per_m3=isk_per_m3,
+            product=p3_product,
+            setup=SetupType.P2_TO_P3,
+            feeder_details=feeder_details,
+        )
+        units.append(unit)
+
+    # Step 4: P3->P4 factory chains (only on p4_capable planets)
+    p3_to_p4_factory_options: Dict[str, FeasibleOption] = {}
+    for opt in matrix:
+        if opt.setup == SetupType.P3_TO_P4:
+            if opt.product not in p3_to_p4_factory_options or opt.max_factories > p3_to_p4_factory_options[opt.product].max_factories:
+                p3_to_p4_factory_options[opt.product] = opt
+
+    # Index: best P2->P3 factory option per P3 product
+    p2_to_p3_factory_by_product: Dict[str, FeasibleOption] = {}
+    for opt in matrix:
+        if opt.setup == SetupType.P2_TO_P3:
+            if opt.product not in p2_to_p3_factory_by_product or opt.max_factories > p2_to_p3_factory_by_product[opt.product].max_factories:
+                p2_to_p3_factory_by_product[opt.product] = opt
+
+    for p4_product, p4_opt in p3_to_p4_factory_options.items():
+        p4_scored = ScoredOption(option=p4_opt, isk_per_day=0.0, isk_per_colony=0.0,
+                                 volume_per_day=p4_opt.output_volume_per_day)
+        p4_recipe = game_data.get_recipe("p3_to_p4", p4_product)
+        if not p4_recipe:
+            continue
+        output_mkt = market_data.get(p4_product)
+        if not output_mkt or output_mkt.buy_price <= 0:
+            continue
+
+        num_p4_factories = p4_opt.max_factories
+        p4_output_per_hour = p4_recipe.output_per_hour * num_p4_factories
+        daily_output = p4_output_per_hour * 24
+        revenue = daily_output * output_mkt.buy_price
+        export_tax = revenue * constraints.tax_rate
+        chain_isk = revenue - export_tax
+        if chain_isk <= 0:
+            continue
+
+        p4_mat = game_data.materials.get(p4_product)
+        vol_per_unit = p4_mat.volume_m3 if p4_mat else 100.0
+        chain_volume = daily_output * vol_per_unit
+
+        feeder_details = []
+        total_feeder_colonies = 0
+        feasible = True
+        feeder_options_list = []
+
+        for input_name, input_qty_per_cycle in p4_recipe.inputs:
+            input_tier = game_data.get_material_tier(input_name)
+
+            if input_tier == "p3":
+                # P3 input: need P2->P3 intermediate factories, which need P1->P2, which need extraction
+                p3_per_hour = input_qty_per_cycle * (3600 / p4_recipe.cycle_seconds) * num_p4_factories
+
+                p3_factory_opt = p2_to_p3_factory_by_product.get(input_name)
+                if not p3_factory_opt:
+                    feasible = False
+                    break
+
+                p3_recipe = game_data.get_recipe("p2_to_p3", input_name)
+                if not p3_recipe:
+                    feasible = False
+                    break
+                p3_per_hour_per_colony = p3_recipe.output_per_hour * p3_factory_opt.max_factories
+
+                p3_colonies_needed = math.ceil(p3_per_hour / p3_per_hour_per_colony)
+                p3_colonies_needed = max(1, p3_colonies_needed)
+
+                p3_factory_scored = ScoredOption(
+                    option=p3_factory_opt, isk_per_day=0.0, isk_per_colony=0.0,
+                    volume_per_day=p3_factory_opt.output_volume_per_day,
+                )
+                feeder_details.append((input_name, p3_colonies_needed, p3_factory_scored, SetupType.P2_TO_P3))
+                feeder_options_list.append(p3_factory_scored)
+                total_feeder_colonies += p3_colonies_needed
+
+                # Now each P3 factory needs P2 inputs
+                for p2_input_name, p2_qty_per_cycle in p3_recipe.inputs:
+                    p2_per_hour = p2_qty_per_cycle * (3600 / p3_recipe.cycle_seconds) * p3_factory_opt.max_factories * p3_colonies_needed
+
+                    p2_factory_opt = p1_to_p2_factory_by_product.get(p2_input_name)
+                    if not p2_factory_opt:
+                        feasible = False
+                        break
+                    p2_recipe = game_data.get_recipe("p1_to_p2", p2_input_name)
+                    if not p2_recipe:
+                        feasible = False
+                        break
+                    p2_per_hour_per_colony = p2_recipe.output_per_hour * p2_factory_opt.max_factories
+
+                    p2_colonies_needed = math.ceil(p2_per_hour / p2_per_hour_per_colony)
+                    p2_colonies_needed = max(1, p2_colonies_needed)
+
+                    p2_factory_scored = ScoredOption(
+                        option=p2_factory_opt, isk_per_day=0.0, isk_per_colony=0.0,
+                        volume_per_day=p2_factory_opt.output_volume_per_day,
+                    )
+                    feeder_details.append((p2_input_name, p2_colonies_needed, p2_factory_scored, SetupType.P1_TO_P2))
+                    feeder_options_list.append(p2_factory_scored)
+                    total_feeder_colonies += p2_colonies_needed
+
+                    # Extraction feeders for each P1 input of this P2
+                    for p1_input_name, p1_qty_per_cycle in p2_recipe.inputs:
+                        p1_per_hour = p1_qty_per_cycle * (3600 / p2_recipe.cycle_seconds) * p2_factory_opt.max_factories * p2_colonies_needed
+
+                        r0_name = game_data.r0_for_p1(p1_input_name)
+                        if not r0_name:
+                            feasible = False
+                            break
+                        planet_types_for_r0 = game_data.planet_types_for_r0(r0_name)
+                        if not any(pt in system_planet_type_names for pt in planet_types_for_r0):
+                            feasible = False
+                            break
+
+                        ext_opt = extraction_by_p1.get(p1_input_name)
+                        if not ext_opt:
+                            feasible = False
+                            break
+
+                        p1_per_hour_per_colony = _calc_extraction_p1_per_hour(ext_opt, game_data, constraints.cycle_days)
+                        if p1_per_hour_per_colony <= 0:
+                            feasible = False
+                            break
+                        ext_colonies_needed = math.ceil(p1_per_hour / p1_per_hour_per_colony)
+                        ext_colonies_needed = max(1, ext_colonies_needed)
+
+                        feeder_details.append((p1_input_name, ext_colonies_needed, ext_opt, SetupType.R0_TO_P1))
+                        feeder_options_list.append(ext_opt)
+                        total_feeder_colonies += ext_colonies_needed
+
+                    if not feasible:
+                        break
+
+                if not feasible:
+                    break
+
+            elif input_tier == "p1":
+                # P1 input directly to P4 (e.g., Reactive Metals for Nano-Factory)
+                p1_per_hour = input_qty_per_cycle * (3600 / p4_recipe.cycle_seconds) * num_p4_factories
+
+                r0_name = game_data.r0_for_p1(input_name)
+                if not r0_name:
+                    feasible = False
+                    break
+                planet_types_for_r0 = game_data.planet_types_for_r0(r0_name)
+                if not any(pt in system_planet_type_names for pt in planet_types_for_r0):
+                    feasible = False
+                    break
+
+                ext_opt = extraction_by_p1.get(input_name)
+                if not ext_opt:
+                    feasible = False
+                    break
+
+                p1_per_hour_per_colony = _calc_extraction_p1_per_hour(ext_opt, game_data, constraints.cycle_days)
+                if p1_per_hour_per_colony <= 0:
+                    feasible = False
+                    break
+                ext_colonies_needed = math.ceil(p1_per_hour / p1_per_hour_per_colony)
+                ext_colonies_needed = max(1, ext_colonies_needed)
+
+                feeder_details.append((input_name, ext_colonies_needed, ext_opt, SetupType.R0_TO_P1))
+                feeder_options_list.append(ext_opt)
+                total_feeder_colonies += ext_colonies_needed
+
+            else:
+                # Unexpected tier
+                feasible = False
+                break
+
+        if not feasible:
+            continue
+
+        total_colonies = 1 + total_feeder_colonies
+        isk_per_m3 = chain_isk / chain_volume if chain_volume > 0 else 0.0
+
+        unit = _ProductionUnit(
+            kind="chain",
+            factory_option=p4_scored,
+            feeder_options=feeder_options_list,
+            feeder_colony_count=total_feeder_colonies,
+            total_colonies=total_colonies,
+            isk_per_day=chain_isk,
+            volume_per_day=chain_volume,
+            isk_per_m3=isk_per_m3,
+            product=p4_product,
+            setup=SetupType.P3_TO_P4,
             feeder_details=feeder_details,
         )
         units.append(unit)
@@ -379,9 +695,9 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
     colonies_used = 0
     volume_used = 0.0
     allocated_products = set()
-    # Track P1 extraction colonies already allocated as feeders to avoid double-counting
-    # Key: p1_name -> number of feeder colonies allocated
-    feeder_p1_colonies: Dict[str, int] = {}
+    # Track feeder colonies already allocated to avoid double-counting
+    # Key: (material_name, setup_type) -> number of feeder colonies allocated
+    feeder_p1_colonies: Dict[tuple, int] = {}
     # Track which extraction products have standalone colonies
     standalone_extraction_products = set()
     # Track colonies per physical planet (max = num_characters per planet)
@@ -431,23 +747,33 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
                 continue
 
             # Calculate actual additional feeder colonies needed (sharing with existing feeders)
-            # Check total planet slot availability across ALL planets that can produce each P1
+            # Check total planet slot availability across ALL planets that can produce each input
             additional_feeders = 0
             feeder_plan = []
             chain_feasible = True
-            for p1_name, colonies_needed, ext_opt in unit.feeder_details:
-                already_allocated = feeder_p1_colonies.get(p1_name, 0)
+            for material_name, colonies_needed, feeder_opt, feeder_setup in unit.feeder_details:
+                already_allocated = feeder_p1_colonies.get((material_name, feeder_setup), 0)
                 new_needed = max(0, colonies_needed - already_allocated)
-                # Count total available slots across all planets that produce this P1
-                total_available = 0
-                for s in scored:
-                    if s.option.setup == SetupType.R0_TO_P1 and s.option.product == p1_name:
-                        total_available += num_characters - planet_colony_counts.get(s.option.planet.planet_id, 0)
-                if new_needed > total_available:
-                    chain_feasible = False
-                    break
+                if feeder_setup == SetupType.R0_TO_P1:
+                    # Count total available slots across all planets that produce this P1
+                    total_available = 0
+                    for s in scored:
+                        if s.option.setup == SetupType.R0_TO_P1 and s.option.product == material_name:
+                            total_available += num_characters - planet_colony_counts.get(s.option.planet.planet_id, 0)
+                    if new_needed > total_available:
+                        chain_feasible = False
+                        break
+                else:
+                    # For factory feeders (P1_TO_P2, P2_TO_P3), check planet slots for the factory option
+                    total_available = 0
+                    for opt in matrix:
+                        if opt.setup == feeder_setup and opt.product == material_name:
+                            total_available += num_characters - planet_colony_counts.get(opt.planet.planet_id, 0)
+                    if new_needed > total_available:
+                        chain_feasible = False
+                        break
                 additional_feeders += new_needed
-                feeder_plan.append((p1_name, colonies_needed, new_needed, ext_opt))
+                feeder_plan.append((material_name, colonies_needed, new_needed, feeder_opt, feeder_setup))
 
             if not chain_feasible:
                 continue
@@ -460,48 +786,75 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
             result.assignments.append(ColonyAssignment(
                 planet_id=unit.factory_option.option.planet.planet_id,
                 planet_type=unit.factory_option.option.planet.planet_type.name,
-                setup=SetupType.P1_TO_P2,
+                setup=unit.setup,
                 product=unit.product,
                 num_factories=unit.factory_option.option.max_factories,
                 isk_per_day=unit.isk_per_day,
                 volume_per_day=unit.volume_per_day,
-                details=f"p1_to_p2 on {unit.factory_option.option.planet.planet_type.name} ({unit.factory_option.option.max_factories} factories)",
+                details=f"{unit.setup.value} on {unit.factory_option.option.planet.planet_type.name} ({unit.factory_option.option.max_factories} factories)",
                 category="ship",
             ))
             colonies_used += 1
             _use_planet_slot(unit.factory_option.option.planet.planet_id)
 
-            # Allocate feeder extraction colonies, spreading across planets
-            for p1_name, total_needed, new_needed, ext_opt in feeder_plan:
-                # Find all extraction options for this P1 product
-                p1_extraction_options = [
-                    s for s in scored
-                    if s.option.setup == SetupType.R0_TO_P1
-                    and s.option.product == p1_name
-                    and s.isk_per_day > 0
-                ]
-                placed = 0
-                for ext in p1_extraction_options:
-                    if placed >= new_needed:
-                        break
-                    while placed < new_needed and _planet_has_slot(ext.option.planet.planet_id):
-                        result.assignments.append(ColonyAssignment(
-                            planet_id=ext.option.planet.planet_id,
-                            planet_type=ext.option.planet.planet_type.name,
-                            setup=SetupType.R0_TO_P1,
-                            product=p1_name,
-                            num_factories=ext.option.max_factories,
-                            isk_per_day=0.0,
-                            volume_per_day=0.0,
-                            details=f"r0_to_p1 on {ext.option.planet.planet_type.name} (feeding {unit.product})",
-                            category="feed",
-                            feeds=f"-> {unit.product} factory",
-                        ))
-                        colonies_used += 1
-                        _use_planet_slot(ext.option.planet.planet_id)
-                        placed += 1
-                feeder_p1_colonies[p1_name] = feeder_p1_colonies.get(p1_name, 0) + placed
-                allocated_products.add(p1_name)
+            # Allocate feeder colonies (extraction and intermediate factories), spreading across planets
+            for material_name, total_needed, new_needed, feeder_opt, feeder_setup in feeder_plan:
+                if feeder_setup == SetupType.R0_TO_P1:
+                    # Extraction feeder: find all extraction options for this P1 product
+                    candidate_options = [
+                        s for s in scored
+                        if s.option.setup == SetupType.R0_TO_P1
+                        and s.option.product == material_name
+                        and s.isk_per_day > 0
+                    ]
+                    placed = 0
+                    for ext in candidate_options:
+                        if placed >= new_needed:
+                            break
+                        while placed < new_needed and _planet_has_slot(ext.option.planet.planet_id):
+                            result.assignments.append(ColonyAssignment(
+                                planet_id=ext.option.planet.planet_id,
+                                planet_type=ext.option.planet.planet_type.name,
+                                setup=SetupType.R0_TO_P1,
+                                product=material_name,
+                                num_factories=ext.option.max_factories,
+                                isk_per_day=0.0,
+                                volume_per_day=0.0,
+                                details=f"r0_to_p1 on {ext.option.planet.planet_type.name} (feeding {unit.product})",
+                                category="feed",
+                                feeds=f"-> {unit.product} factory",
+                            ))
+                            colonies_used += 1
+                            _use_planet_slot(ext.option.planet.planet_id)
+                            placed += 1
+                else:
+                    # Factory feeder (P1_TO_P2 or P2_TO_P3): find all factory options for this product
+                    candidate_options_raw = [
+                        opt for opt in matrix
+                        if opt.setup == feeder_setup and opt.product == material_name
+                    ]
+                    placed = 0
+                    for fopt in candidate_options_raw:
+                        if placed >= new_needed:
+                            break
+                        while placed < new_needed and _planet_has_slot(fopt.planet.planet_id):
+                            result.assignments.append(ColonyAssignment(
+                                planet_id=fopt.planet.planet_id,
+                                planet_type=fopt.planet.planet_type.name,
+                                setup=feeder_setup,
+                                product=material_name,
+                                num_factories=fopt.max_factories,
+                                isk_per_day=0.0,
+                                volume_per_day=0.0,
+                                details=f"{feeder_setup.value} on {fopt.planet.planet_type.name} (feeding {unit.product})",
+                                category="feed",
+                                feeds=f"-> {unit.product} factory",
+                            ))
+                            colonies_used += 1
+                            _use_planet_slot(fopt.planet.planet_id)
+                            placed += 1
+                feeder_p1_colonies[(material_name, feeder_setup)] = feeder_p1_colonies.get((material_name, feeder_setup), 0) + placed
+                allocated_products.add(material_name)
 
             volume_used += unit.volume_per_day
             allocated_products.add(unit.product)
