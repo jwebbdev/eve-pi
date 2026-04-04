@@ -116,6 +116,17 @@ def _fit_extraction(remaining_cpu, remaining_power, link_power_per_factory,
                     link_cpu_per_factory, game_data, details):
     basic = game_data.facilities["basic_factory"]
     head = game_data.facilities["extractor_head"]
+    ecu_base = game_data.facilities.get("extractor_base")
+    ecu_base_cpu = ecu_base.cpu_tf if ecu_base else 400
+    ecu_base_power = ecu_base.power_mw if ecu_base else 2600
+
+    # Reserve ECU base structure cost (1 ECU for R0→P1)
+    remaining_cpu -= ecu_base_cpu + link_cpu_per_factory  # ECU + its link
+    remaining_power -= ecu_base_power + link_power_per_factory
+
+    if remaining_cpu <= 0 or remaining_power <= 0:
+        return False, 0, {"error": "ECU exceeds remaining capacity"}
+
     cost_per_factory_cpu = basic.cpu_tf + link_cpu_per_factory
     cost_per_factory_power = basic.power_mw + link_power_per_factory
     best_factories = 0
@@ -145,17 +156,23 @@ def _fit_r0_to_p2(remaining_cpu, remaining_power, link_power_per_factory,
     advanced = game_data.facilities["advanced_factory"]
     basic = game_data.facilities["basic_factory"]
     head = game_data.facilities["extractor_head"]
-    adv_cpu = advanced.cpu_tf + link_cpu_per_factory
-    adv_power = advanced.power_mw + link_power_per_factory
-    remaining_cpu -= adv_cpu
-    remaining_power -= adv_power
+    ecu_base = game_data.facilities.get("extractor_base")
+    ecu_base_cpu = ecu_base.cpu_tf if ecu_base else 400
+    ecu_base_power = ecu_base.power_mw if ecu_base else 2600
+
+    # Reserve: 1 advanced factory + 2 ECU bases (one per R0 type) + their links
+    fixed_cpu = (advanced.cpu_tf + ecu_base_cpu * 2 + link_cpu_per_factory * 3)
+    fixed_power = (advanced.power_mw + ecu_base_power * 2 + link_power_per_factory * 3)
+    remaining_cpu -= fixed_cpu
+    remaining_power -= fixed_power
     if remaining_cpu <= 0 or remaining_power <= 0:
-        return False, 0, {"error": "Cannot fit advanced factory for R0->P2"}
+        return False, 0, {"error": "Cannot fit advanced factory + 2 ECUs for R0->P2"}
     cost_per_basic_cpu = basic.cpu_tf + link_cpu_per_factory
     cost_per_basic_power = basic.power_mw + link_power_per_factory
     best_basics = 0
     best_heads = 0
-    for heads in range(1, 11):
+    # Total heads split across 2 ECUs
+    for heads in range(2, 21):  # 2-20 total heads (1-10 per ECU)
         head_cpu = head.cpu_tf * heads
         head_power = head.power_mw * heads
         factory_cpu = remaining_cpu - head_cpu

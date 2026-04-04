@@ -21,6 +21,10 @@ facilities:
     cpu_tf: 500
     power_mw: 700
     storage_m3: 12000
+  extractor_base:
+    name: Extractor Control Unit (base)
+    cpu_tf: 400
+    power_mw: 2600
   extractor_head:
     name: Extractor Head
     cpu_tf: 110
