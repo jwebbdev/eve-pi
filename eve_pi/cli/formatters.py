@@ -44,6 +44,42 @@ def _format_self_sufficient(result: OptimizationResult, constraints: Optimizatio
     lines.append("=" * 80)
     lines.append("")
 
+    # Build grouped display: factory chains show feeders indented beneath
+    feed = result.feed_assignments
+    feed_by_factory: dict = {}
+    for a in feed:
+        factory_product = a.feeds.replace("-> ", "").replace(" factory", "") if a.feeds else ""
+        if factory_product not in feed_by_factory:
+            feed_by_factory[factory_product] = []
+        feed_by_factory[factory_product].append(a)
+
+    # Manufacturing section (highest priority)
+    manufacturing = result.manufacturing_assignments
+    if manufacturing or constraints.manufacturing_needs:
+        lines.append("MANUFACTURING (internal use, not exported):")
+        if manufacturing:
+            lines.append("")
+            lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'Character':<16} {'ISK/day':>12} {'units/wk':>10}")
+            lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------------':<16} {'----------':>12} {'--------':>10}")
+            idx = 0
+            for a in manufacturing:
+                idx += 1
+                # Estimate weekly output from volume
+                output_units_per_week = a.volume_per_day * 7
+                lines.append(
+                    f"  {idx:<3} {a.product:<20} {a.setup.value:<12} {a.planet_type:<10} "
+                    f"{a.character:<16} {a.isk_per_day:>12,.0f} {output_units_per_week:>10,.0f}"
+                )
+                feeders = feed_by_factory.get(a.product, [])
+                for fa in feeders:
+                    lines.append(
+                        f"      -> {fa.product:<18} {fa.setup.value:<12} {fa.planet_type:<10} "
+                        f"{fa.character:<16} {'':>12} {'[feed]':>10}"
+                    )
+        else:
+            lines.append("  (Could not allocate manufacturing needs — check planet availability)")
+        lines.append("")
+
     # Shipping plan section
     trips = constraints.hauling_trips_per_week
     cargo = constraints.cargo_capacity_m3
@@ -55,19 +91,7 @@ def _format_self_sufficient(result: OptimizationResult, constraints: Optimizatio
     lines.append(f"  Shipped volume/week: {result.shipped_volume_per_week:>12,.0f} m3")
     lines.append("")
 
-    # Build grouped display: factory chains show feeders indented beneath
     shipped = result.shipped_assignments
-    feed = result.feed_assignments
-
-    # Group feed assignments by their factory product
-    feed_by_factory: dict = {}
-    for a in feed:
-        # Extract factory product from feeds field "-> Coolant factory"
-        factory_product = a.feeds.replace("-> ", "").replace(" factory", "") if a.feeds else ""
-        if factory_product not in feed_by_factory:
-            feed_by_factory[factory_product] = []
-        feed_by_factory[factory_product].append(a)
-
     if shipped:
         lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'Character':<16} {'ISK/day':>12} {'m3/day':>8}")
         lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------------':<16} {'----------':>12} {'------':>8}")

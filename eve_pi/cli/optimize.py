@@ -7,7 +7,7 @@ from eve_pi.data.loader import GameData
 from eve_pi.market.esi import ESIClient
 from eve_pi.models.characters import Character
 from eve_pi.models.planets import Planet, SolarSystem
-from eve_pi.optimizer.allocator import OptimizationConstraints, optimize
+from eve_pi.optimizer.allocator import ManufacturingNeed, OptimizationConstraints, optimize
 
 PLANET_TYPE_IDS = {
     11: "Temperate", 12: "Ice", 13: "Gas", 2014: "Oceanic",
@@ -138,10 +138,22 @@ def run_optimize(args):
     market = esi.fetch_all_pi_market_data(gd.materials)
     print(f"Loaded market data for {len(market)} materials")
     print("Optimizing...")
+    # Parse manufacturing needs from config
+    mfg_needs = []
+    if "manufacturing_needs" in config:
+        for item in config["manufacturing_needs"]:
+            mfg_needs.append(ManufacturingNeed(
+                product=item["product"],
+                quantity_per_week=item["quantity_per_week"],
+            ))
+        if mfg_needs:
+            print(f"Manufacturing needs: {', '.join(f'{n.product} x{n.quantity_per_week}/wk' for n in mfg_needs)}")
+
     constraints = OptimizationConstraints(
         system=system, characters=characters, mode=args.mode,
         cycle_days=args.cycle_days, hauling_trips_per_week=args.trips_per_week,
         cargo_capacity_m3=args.cargo_m3, tax_rate=args.tax_rate,
+        manufacturing_needs=mfg_needs,
     )
     result = optimize(constraints, market, gd)
     print(format_result(result, constraints))

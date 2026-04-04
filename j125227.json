@@ -12,5 +12,9 @@
   "trips_per_week": 2,
   "cargo_capacity_m3": 60000,
   "tax_rate": 0.05,
-  "mode": "self_sufficient"
+  "mode": "self_sufficient",
+  "manufacturing_needs": [
+    {"product": "Mechanical Parts", "quantity_per_week": 700},
+    {"product": "Coolant", "quantity_per_week": 500}
+  ]
 }
