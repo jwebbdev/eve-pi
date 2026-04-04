@@ -7,6 +7,29 @@
 <div class="error-box">{{ error }}</div>
 {% endif %}
 
+<div class="panel">
+    <div class="panel-header">Saved Configurations</div>
+    <div class="form-row">
+        <div>
+            <select id="configSelect" onchange="loadConfig(this.value)">
+                <option value="">-- Load a saved config --</option>
+                {% if saved_configs %}
+                    {% for cfg in saved_configs %}
+                    <option value="{{ cfg }}" {{ 'selected' if loaded_config == cfg }}>{{ cfg }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="narrow">
+            <input type="text" id="configName" placeholder="Config name" value="{{ loaded_config or '' }}">
+        </div>
+        <div class="action">
+            <button type="button" class="btn btn-sm" onclick="saveConfig()" style="margin-right:5px">Save</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteConfig()">Delete</button>
+        </div>
+    </div>
+</div>
+
 <form method="post" action="/optimize" id="optimizerForm">
     <div class="panel">
         <div class="panel-header">System &amp; Settings</div>
@@ -261,5 +284,64 @@
     document.getElementById('optimizerForm').addEventListener('submit', function() {
         document.getElementById('processingOverlay').classList.add('active');
     });
+
+    // --- Config save/load ---
+    function gatherFormData() {
+        const chars = [];
+        document.querySelectorAll('#characters .dynamic-item').forEach(item => {
+            chars.push({
+                name: item.querySelector('[name="char_name"]').value,
+                ccu_level: parseInt(item.querySelector('[name="char_ccu"]').value),
+                max_planets: parseInt(item.querySelector('[name="char_max_planets"]').value),
+            });
+        });
+        const mfg = [];
+        document.querySelectorAll('#manufacturing .dynamic-item').forEach(item => {
+            const product = item.querySelector('[name="mfg_product"]').value;
+            const qty = parseInt(item.querySelector('[name="mfg_quantity"]').value);
+            if (product && qty > 0) mfg.push({product, quantity_per_week: qty});
+        });
+        return {
+            system: document.getElementById('system').value,
+            mode: document.querySelector('input[name="mode"]:checked')?.value || 'self_sufficient',
+            cycle_days: parseFloat(document.getElementById('cycle_days').value),
+            trips_per_week: parseInt(document.getElementById('trips_per_week').value),
+            cargo_m3: parseFloat(document.getElementById('cargo_m3').value),
+            tax_rate: parseFloat(document.getElementById('tax_rate').value),
+            characters: chars,
+            manufacturing_needs: mfg,
+        };
+    }
+
+    function saveConfig() {
+        const name = document.getElementById('configName').value.trim();
+        if (!name) { alert('Enter a config name'); return; }
+        const data = gatherFormData();
+        fetch(`/api/configs/${encodeURIComponent(name)}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data),
+        }).then(r => r.json()).then(result => {
+            if (result.status === 'saved') {
+                // Refresh to show in dropdown
+                window.location.href = `/?config=${encodeURIComponent(name)}`;
+            }
+        });
+    }
+
+    function loadConfig(name) {
+        if (!name) return;
+        window.location.href = `/?config=${encodeURIComponent(name)}`;
+    }
+
+    function deleteConfig() {
+        const name = document.getElementById('configName').value.trim() ||
+                     document.getElementById('configSelect').value;
+        if (!name) { alert('Select or enter a config name to delete'); return; }
+        if (!confirm(`Delete config "${name}"?`)) return;
+        fetch(`/api/configs/${encodeURIComponent(name)}`, {method: 'DELETE'})
+            .then(r => r.json())
+            .then(() => window.location.href = '/');
+    }
 </script>
 {% endblock %}
