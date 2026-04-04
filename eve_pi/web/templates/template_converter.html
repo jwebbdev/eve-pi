@@ -122,14 +122,19 @@
         jsonPre.style.display = 'none';
     }
 
+    function ensureFloats(jsonStr) {
+        jsonStr = jsonStr.replace(/"Diam":(-?\d+)([,}])/g, '"Diam":$1.0$2');
+        jsonStr = jsonStr.replace(/"La":(-?\d+)([,}])/g, '"La":$1.0$2');
+        jsonStr = jsonStr.replace(/"Lo":(-?\d+)([,}])/g, '"Lo":$1.0$2');
+        return jsonStr;
+    }
+
     function copyResult() {
         const jsonPre = document.getElementById('resultJson');
-        // Compact single-line JSON with Diam as float
         let text;
         try {
             const parsed = JSON.parse(jsonPre.textContent);
-            text = JSON.stringify(parsed);
-            text = text.replace(/"Diam":(\d+)([,}])/, '"Diam":$1.0$2');
+            text = ensureFloats(JSON.stringify(parsed));
         } catch {
             text = jsonPre.textContent;
         }

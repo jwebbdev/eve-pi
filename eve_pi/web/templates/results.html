@@ -218,15 +218,21 @@
         document.getElementById('templateModal').style.display = 'none';
     }
 
+    function ensureFloats(jsonStr) {
+        // EVE requires float values for Diam, La, Lo. JS drops .0 on whole numbers.
+        // Fix any numeric field that should be float.
+        jsonStr = jsonStr.replace(/"Diam":(\d+)([,}])/g, '"Diam":$1.0$2');
+        jsonStr = jsonStr.replace(/"La":(-?\d+)([,}])/g, '"La":$1.0$2');
+        jsonStr = jsonStr.replace(/"Lo":(-?\d+)([,}])/g, '"Lo":$1.0$2');
+        return jsonStr;
+    }
+
     function copyTemplate() {
         const textarea = document.getElementById('templateJson');
-        // Copy as compact single-line JSON for game import
-        // Ensure Diam stays as float (JS drops .0, EVE requires it)
         try {
             const parsed = JSON.parse(textarea.value);
             let compact = JSON.stringify(parsed);
-            // Fix Diam to always have .0 suffix if it's a whole number
-            compact = compact.replace(/"Diam":(\d+)([,}])/, '"Diam":$1.0$2');
+            compact = ensureFloats(compact);
             navigator.clipboard.writeText(compact);
         } catch {
             navigator.clipboard.writeText(textarea.value);
