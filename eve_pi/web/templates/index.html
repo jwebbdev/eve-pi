@@ -79,16 +79,18 @@
 
     <div class="panel">
         <div class="panel-header">Characters</div>
+        <div class="dynamic-item" style="border:none; padding:0 0 4px 0; margin:0;">
+            <div><label>Name</label></div>
+            <div class="narrow"><label>CCU Level</label></div>
+            <div class="narrow"><label>Max Planets</label></div>
+            <div class="action"></div>
+        </div>
         <div id="characters" class="dynamic-section">
             {% if form_values and form_values.characters %}
                 {% for char in form_values.characters %}
                 <div class="dynamic-item" data-type="character">
-                    <div>
-                        <label>Name</label>
-                        <input type="text" name="char_name" value="{{ char.name }}" placeholder="Character name">
-                    </div>
+                    <div><input type="text" name="char_name" value="{{ char.name }}" placeholder="Character name"></div>
                     <div class="narrow">
-                        <label>CCU Level</label>
                         <select name="char_ccu">
                             {% for lvl in range(6) %}
                             <option value="{{ lvl }}" {{ 'selected' if char.ccu_level == lvl }}>{{ lvl }}</option>
@@ -96,7 +98,6 @@
                         </select>
                     </div>
                     <div class="narrow">
-                        <label>Max Planets</label>
                         <select name="char_max_planets">
                             {% for p in range(1, 7) %}
                             <option value="{{ p }}" {{ 'selected' if char.max_planets == p }}>{{ p }}</option>
@@ -110,30 +111,17 @@
                 {% endfor %}
             {% else %}
                 <div class="dynamic-item" data-type="character">
-                    <div>
-                        <label>Name</label>
-                        <input type="text" name="char_name" value="Char1" placeholder="Character name">
-                    </div>
+                    <div><input type="text" name="char_name" value="Char1" placeholder="Character name"></div>
                     <div class="narrow">
-                        <label>CCU Level</label>
                         <select name="char_ccu">
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5" selected>5</option>
+                            <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                            <option value="3">3</option><option value="4">4</option><option value="5" selected>5</option>
                         </select>
                     </div>
                     <div class="narrow">
-                        <label>Max Planets</label>
                         <select name="char_max_planets">
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                            <option value="6" selected>6</option>
+                            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                            <option value="4">4</option><option value="5">5</option><option value="6" selected>6</option>
                         </select>
                     </div>
                     <div class="action">
@@ -214,30 +202,17 @@
         div.className = 'dynamic-item';
         div.setAttribute('data-type', 'character');
         div.innerHTML = `
-            <div>
-                <label>Name</label>
-                <input type="text" name="char_name" value="Char${charCount}" placeholder="Character name">
-            </div>
+            <div><input type="text" name="char_name" value="Char${charCount}" placeholder="Character name"></div>
             <div class="narrow">
-                <label>CCU Level</label>
                 <select name="char_ccu">
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5" selected>5</option>
+                    <option value="0">0</option><option value="1">1</option><option value="2">2</option>
+                    <option value="3">3</option><option value="4">4</option><option value="5" selected>5</option>
                 </select>
             </div>
             <div class="narrow">
-                <label>Max Planets</label>
                 <select name="char_max_planets">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6" selected>6</option>
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                    <option value="4">4</option><option value="5">5</option><option value="6" selected>6</option>
                 </select>
             </div>
             <div class="action">
@@ -354,9 +329,9 @@
                 for (let i = 0; i <= 5; i++) ccuOpts += `<option value="${i}" ${char.ccu_level === i ? 'selected' : ''}>${i}</option>`;
                 for (let i = 1; i <= 6; i++) planetOpts += `<option value="${i}" ${char.max_planets === i ? 'selected' : ''}>${i}</option>`;
                 div.innerHTML = `
-                    <div><label>Name</label><input type="text" name="char_name" value="${char.name}"></div>
-                    <div class="narrow"><label>CCU Level</label><select name="char_ccu">${ccuOpts}</select></div>
-                    <div class="narrow"><label>Max Planets</label><select name="char_max_planets">${planetOpts}</select></div>
+                    <div><input type="text" name="char_name" value="${char.name}"></div>
+                    <div class="narrow"><select name="char_ccu">${ccuOpts}</select></div>
+                    <div class="narrow"><select name="char_max_planets">${planetOpts}</select></div>
                     <div class="action"><button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button></div>
                 `;
                 container.appendChild(div);
