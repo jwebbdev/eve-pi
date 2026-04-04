@@ -69,21 +69,21 @@ def _format_self_sufficient(result: OptimizationResult, constraints: Optimizatio
         feed_by_factory[factory_product].append(a)
 
     if shipped:
-        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'ISK/day':>12} {'m3/day':>8}")
-        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------':>12} {'------':>8}")
+        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'Character':<16} {'ISK/day':>12} {'m3/day':>8}")
+        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------------':<16} {'----------':>12} {'------':>8}")
         idx = 0
         for a in shipped:
             idx += 1
             lines.append(
                 f"  {idx:<3} {a.product:<20} {a.setup.value:<12} {a.planet_type:<10} "
-                f"{a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
+                f"{a.character:<16} {a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
             )
             # Show feeders for this factory
             feeders = feed_by_factory.get(a.product, [])
             for fa in feeders:
                 lines.append(
                     f"      -> {fa.product:<18} {fa.setup.value:<12} {fa.planet_type:<10} "
-                    f"{'':>12} {'[feed]':>8}"
+                    f"{fa.character:<16} {'':>12} {'[feed]':>8}"
                 )
     lines.append("")
 
@@ -93,12 +93,12 @@ def _format_self_sufficient(result: OptimizationResult, constraints: Optimizatio
         lines.append("STOCKPILE (produce locally, export when convenient):")
         lines.append(f"  Stockpile ISK/week: {result.stockpile_isk_per_day * 7:>14,.0f}")
         lines.append("")
-        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'ISK/day':>12} {'m3/day':>8}")
-        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------':>12} {'------':>8}")
+        lines.append(f"  {'#':<3} {'Product':<20} {'Setup':<12} {'Planet':<10} {'Character':<16} {'ISK/day':>12} {'m3/day':>8}")
+        lines.append(f"  {'--':<3} {'--------------------':<20} {'------------':<12} {'----------':<10} {'----------------':<16} {'----------':>12} {'------':>8}")
         for i, a in enumerate(stockpile, 1):
             lines.append(
                 f"  {i:<3} {a.product:<20} {a.setup.value:<12} {a.planet_type:<10} "
-                f"{a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
+                f"{a.character:<16} {a.isk_per_day:>12,.0f} {a.volume_per_day:>8,.0f}"
             )
         lines.append("")
 
