@@ -194,3 +194,44 @@ def test_self_sufficient_colony_assignment_categories():
     for a in result.assignments:
         assert a.category in ("ship", "feed", "stockpile"), f"Invalid category: {a.category}"
         assert isinstance(a.feeds, str)
+
+
+def test_self_sufficient_respects_planet_slots():
+    """Each character can only use each physical planet once.
+    With 2 characters and 3 planets, max 6 colonies total.
+    No planet should have more colonies than characters."""
+    gd = GameData.load()
+    system = SolarSystem(name="SmallSystem", system_id=99990, planets=[
+        Planet(planet_id=101, planet_type=gd.planet_types["Barren"], radius_km=3000.0),
+        Planet(planet_id=102, planet_type=gd.planet_types["Gas"], radius_km=5000.0),
+        Planet(planet_id=103, planet_type=gd.planet_types["Lava"], radius_km=4000.0),
+    ])
+    market = _make_fake_market()
+    characters = [
+        Character(name="Char1", ccu_level=4, max_planets=6),
+        Character(name="Char2", ccu_level=4, max_planets=6),
+    ]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=2, cargo_capacity_m3=60000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+
+    # Count colonies per planet_id
+    planet_colony_counts = {}
+    for a in result.assignments:
+        planet_colony_counts[a.planet_id] = planet_colony_counts.get(a.planet_id, 0) + 1
+
+    num_characters = len(characters)
+    for planet_id, count in planet_colony_counts.items():
+        assert count <= num_characters, (
+            f"Planet {planet_id} has {count} colonies but only {num_characters} characters. "
+            f"Each character can only use each planet once."
+        )
+
+    # Total colonies should not exceed characters * planets (but also capped by total_colonies)
+    max_possible = min(
+        sum(c.max_planets for c in characters),
+        len(system.planets) * num_characters,
+    )
+    assert len(result.assignments) <= max_possible
