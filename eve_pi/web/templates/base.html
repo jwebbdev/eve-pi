@@ -129,6 +129,7 @@
             border-radius: 3px;
             width: 100%;
             margin-bottom: 12px;
+            height: 38px;
         }
 
         input:focus, select:focus, textarea:focus {
@@ -159,6 +160,7 @@
         .btn-sm {
             padding: 5px 12px;
             font-size: 11px;
+            height: 38px;
         }
 
         .btn-danger {
@@ -279,8 +281,8 @@
         .dynamic-item {
             display: flex;
             gap: 10px;
-            align-items: flex-end;
-            margin-bottom: 8px;
+            align-items: center;
+            margin-bottom: 4px;
         }
 
         .dynamic-item > div {
@@ -292,8 +294,12 @@
         }
 
         .dynamic-item .action {
-            flex: 0 0 auto;
-            padding-bottom: 12px;
+            flex: 0 0 40px;
+        }
+
+        .dynamic-item input,
+        .dynamic-item select {
+            margin-bottom: 0;
         }
 
         .summary-grid {
