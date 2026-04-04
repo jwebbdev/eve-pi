@@ -234,6 +234,8 @@ async def convert_template_route(request: Request):
 
     try:
         result = convert_template(template, to_planet_type, to_product, game_data)
+        if "Diam" in result:
+            result["Diam"] = float(result["Diam"])
         return JSONResponse({"result": result})
     except Exception as e:
         return JSONResponse({"error": f"Conversion failed: {str(e)}"}, status_code=500)
@@ -284,6 +286,10 @@ async def generate_template(setup: str, planet_type: str, product: str):
     else:
         # Factory templates — convert planet type (product already correct in reference)
         converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
+
+    # Ensure Diam is float (game requires it)
+    if "Diam" in converted:
+        converted["Diam"] = float(converted["Diam"])
 
     return JSONResponse({"template": converted})
 
