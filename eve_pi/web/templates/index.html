@@ -178,7 +178,10 @@
         <button type="button" class="btn btn-sm" onclick="addManufacturing()">+ Add Requirement</button>
     </div>
 
-    <button type="submit" class="btn btn-success" id="submitBtn">Run Optimizer</button>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="submit" class="btn btn-success" id="submitBtn">Run Optimizer</button>
+        <button type="button" class="btn btn-danger" onclick="clearForm()">Clear All Fields</button>
+    </div>
 </form>
 
 <div class="processing-overlay" id="processingOverlay">
@@ -411,6 +414,27 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(configs));
         document.getElementById('configName').value = '';
         refreshConfigDropdown();
+    }
+
+    function clearForm() {
+        document.getElementById('system').value = '';
+        document.getElementById('cycle_days').value = '4';
+        document.getElementById('trips_per_week').value = '2';
+        document.getElementById('cargo_m3').value = '60000';
+        document.getElementById('tax_rate').value = '0.05';
+        document.querySelector('input[name="mode"][value="self_sufficient"]').checked = true;
+        // Reset to one empty character
+        const charContainer = document.getElementById('characters');
+        charContainer.innerHTML = '';
+        charCount = 0;
+        addCharacter();
+        // Clear manufacturing needs
+        document.getElementById('manufacturing').innerHTML = '';
+        // Clear config name
+        document.getElementById('configName').value = '';
+        document.getElementById('configSelect').value = '';
+        // Clear sessionStorage
+        sessionStorage.removeItem('eve_pi_last_form');
     }
 
     // Initialize dropdown on page load
