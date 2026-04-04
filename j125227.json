@@ -1,0 +1,16 @@
+{
+  "system": "J125227",
+  "characters": [
+    {"name": "Vapes", "ccu_level": 5, "max_planets": 5},
+    {"name": "Vazryl", "ccu_level": 5, "max_planets": 5},
+    {"name": "Vapesy", "ccu_level": 5, "max_planets": 5},
+    {"name": "Vazryl Drake", "ccu_level": 4, "max_planets": 5},
+    {"name": "PI Kindahlin", "ccu_level": 5, "max_planets": 6},
+    {"name": "PI Kindahlin II", "ccu_level": 4, "max_planets": 6}
+  ],
+  "cycle_days": 4,
+  "trips_per_week": 2,
+  "cargo_capacity_m3": 60000,
+  "tax_rate": 0.05,
+  "mode": "self_sufficient"
+}

@@ -8,7 +8,8 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     opt_parser = subparsers.add_parser("optimize", help="Optimize colony allocation")
-    opt_parser.add_argument("--system", required=True, help="System name (e.g., J153003)")
+    opt_parser.add_argument("--config", help="JSON config file with characters, defaults, etc.")
+    opt_parser.add_argument("--system", help="System name (e.g., J153003)")
     opt_parser.add_argument("--characters", type=str, default="1",
                             help="Character specs. Examples: '6', 'Alice,Bob', 'Alice:5,Bob:4' (name:ccu), "
                             "'Alice:5:6,Bob:4:5' (name:ccu:planets)")
