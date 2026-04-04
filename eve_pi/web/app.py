@@ -145,16 +145,18 @@ async def run_optimization(request: Request):
                            error=f"Could not find system '{system_name}'. Check spelling and try again.",
                            **base_ctx)
 
-        # Fetch planets
+        # Fetch planets with real radii
         raw_planets = esi.fetch_system_planets(system_id)
+        radii = esi.fetch_planet_radii()
         planets = []
         for rp in raw_planets:
             type_name = PLANET_TYPE_IDS.get(rp["type_id"])
             if type_name and type_name in game_data.planet_types:
+                radius_km = radii.get(rp["planet_id"], 3000.0)
                 planets.append(Planet(
                     planet_id=rp["planet_id"],
                     planet_type=game_data.planet_types[type_name],
-                    radius_km=3000.0,
+                    radius_km=radius_km,
                 ))
         system = SolarSystem(name=system_name, system_id=system_id, planets=planets)
 

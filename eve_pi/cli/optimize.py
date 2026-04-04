@@ -113,17 +113,22 @@ def run_optimize(args):
         return
     print("Fetching planet data...")
     raw_planets = esi.fetch_system_planets(system_id)
+    print("Fetching planet radii from SDE...")
+    radii = esi.fetch_planet_radii()
     planets = []
     for rp in raw_planets:
         type_name = PLANET_TYPE_IDS.get(rp["type_id"])
         if type_name and type_name in gd.planet_types:
+            radius_km = radii.get(rp["planet_id"], 3000.0)
             planets.append(Planet(
                 planet_id=rp["planet_id"],
                 planet_type=gd.planet_types[type_name],
-                radius_km=3000.0,
+                radius_km=radius_km,
             ))
     system = SolarSystem(name=args.system, system_id=system_id, planets=planets)
     print(f"Found {len(planets)} planets")
+    for p in planets:
+        print(f"  {p.planet_type.name:>10} (ID {p.planet_id}): {p.radius_km:,.0f} km")
 
     # Build characters: config file takes priority, then CLI parsing
     if hasattr(args, "_config_characters") and args._config_characters:

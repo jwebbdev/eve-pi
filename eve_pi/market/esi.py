@@ -1,4 +1,7 @@
 """ESI API client for market data and system info."""
+import bz2
+import csv
+import io
 import json
 import time
 import urllib.request
@@ -127,3 +130,50 @@ class ESIClient:
                     "name": pdata.get("name", f"Planet {planet_id}"),
                 })
         return planets
+
+    def fetch_planet_radii(self) -> Dict[int, float]:
+        """
+        Download planet radius data from Fuzzwork SDE (mapDenormalize.csv.bz2).
+        Returns dict of planet_id -> radius in kilometers.
+        Cached for 7 days.
+        """
+        cache_key = "sde_planet_radius"
+        # Use a longer-lived cache for SDE data
+        sde_cache = FileCache(self.cache.cache_dir, ttl_seconds=7 * 24 * 3600)
+        cached = sde_cache.load(cache_key)
+        if cached is not None:
+            return {int(k): v for k, v in cached.items()}
+
+        print("Downloading planet radius data from Fuzzwork SDE...")
+        url = "https://www.fuzzwork.co.uk/dump/latest/mapDenormalize.csv.bz2"
+        planet_type_ids = {11, 12, 13, 2014, 2015, 2016, 2017, 2063}
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                compressed = resp.read()
+
+            decompressed = bz2.decompress(compressed)
+            reader = csv.DictReader(io.StringIO(decompressed.decode("utf-8")))
+
+            radius_by_id = {}
+            for row in reader:
+                try:
+                    type_id = int(row.get("typeID", 0))
+                    if type_id in planet_type_ids:
+                        item_id = int(row.get("itemID", 0))
+                        radius_str = row.get("radius", "0")
+                        if radius_str and radius_str != "None" and item_id > 0:
+                            radius_m = float(radius_str)
+                            if radius_m > 0:
+                                radius_by_id[item_id] = radius_m / 1000.0  # meters to km
+                except (ValueError, TypeError):
+                    continue
+
+            print(f"Loaded radius data for {len(radius_by_id)} planets")
+            sde_cache.save(cache_key, {str(k): v for k, v in radius_by_id.items()})
+            return radius_by_id
+
+        except Exception as e:
+            print(f"Failed to download planet radius data: {e}")
+            return {}
