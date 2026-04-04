@@ -22,6 +22,7 @@ from eve_pi.optimizer.allocator import (
     optimize,
 )
 from eve_pi.templates.converter import convert_template
+from eve_pi.templates.generator import generate_template as gen_template
 import html
 import re
 from datetime import datetime
