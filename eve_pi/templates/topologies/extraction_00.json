@@ -1,0 +1,290 @@
+{
+  "name": "extraction_00",
+  "ccu_level": 5,
+  "diameter": 8160.0,
+  "pins": [
+    {
+      "index": 0,
+      "role": "factory",
+      "latitude": 1.5655,
+      "longitude": 2.65974,
+      "heads": 0
+    },
+    {
+      "index": 1,
+      "role": "factory",
+      "latitude": 1.60765,
+      "longitude": 2.63503,
+      "heads": 0
+    },
+    {
+      "index": 2,
+      "role": "factory",
+      "latitude": 1.60741,
+      "longitude": 2.65942,
+      "heads": 0
+    },
+    {
+      "index": 3,
+      "role": "factory",
+      "latitude": 1.57585,
+      "longitude": 2.64073,
+      "heads": 0
+    },
+    {
+      "index": 4,
+      "role": "extractor",
+      "latitude": 1.58638,
+      "longitude": 2.63474,
+      "heads": 10
+    },
+    {
+      "index": 5,
+      "role": "factory",
+      "latitude": 1.57584,
+      "longitude": 2.65315,
+      "heads": 0
+    },
+    {
+      "index": 6,
+      "role": "factory",
+      "latitude": 1.597,
+      "longitude": 2.65284,
+      "heads": 0
+    },
+    {
+      "index": 7,
+      "role": "launchpad",
+      "latitude": 1.58635,
+      "longitude": 2.64693,
+      "heads": 0
+    },
+    {
+      "index": 8,
+      "role": "factory",
+      "latitude": 1.59704,
+      "longitude": 2.64067,
+      "heads": 0
+    },
+    {
+      "index": 9,
+      "role": "factory",
+      "latitude": 1.56521,
+      "longitude": 2.63477,
+      "heads": 0
+    },
+    {
+      "index": 10,
+      "role": "launchpad",
+      "latitude": 1.58633,
+      "longitude": 2.65906,
+      "heads": 0
+    }
+  ],
+  "links": [
+    {
+      "D": 9,
+      "Lv": 0,
+      "S": 8
+    },
+    {
+      "D": 8,
+      "Lv": 0,
+      "S": 5
+    },
+    {
+      "D": 4,
+      "Lv": 0,
+      "S": 8
+    },
+    {
+      "D": 10,
+      "Lv": 0,
+      "S": 4
+    },
+    {
+      "D": 1,
+      "Lv": 0,
+      "S": 6
+    },
+    {
+      "D": 6,
+      "Lv": 0,
+      "S": 8
+    },
+    {
+      "D": 11,
+      "Lv": 0,
+      "S": 8
+    },
+    {
+      "D": 3,
+      "Lv": 0,
+      "S": 7
+    },
+    {
+      "D": 2,
+      "Lv": 0,
+      "S": 9
+    },
+    {
+      "D": 7,
+      "Lv": 0,
+      "S": 8
+    }
+  ],
+  "route_patterns": [
+    {
+      "path": [
+        8,
+        6
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        6,
+        1
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        4
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        4,
+        10
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        7
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        7,
+        3
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        9
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        8,
+        9,
+        2
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        1,
+        6,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        6,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        4,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        10,
+        4,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        9,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        2,
+        9,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        7,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        7,
+        8,
+        11
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        5,
+        8
+      ],
+      "quantity": 290112,
+      "role": "input"
+    }
+  ]
+}

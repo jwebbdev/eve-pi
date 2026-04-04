@@ -1,0 +1,232 @@
+{
+  "name": "extraction_ls",
+  "ccu_level": 5,
+  "diameter": 11860.0,
+  "pins": [
+    {
+      "index": 0,
+      "role": "extractor",
+      "latitude": 1.61515,
+      "longitude": 2.91194,
+      "heads": 8
+    },
+    {
+      "index": 1,
+      "role": "extractor",
+      "latitude": 1.62729,
+      "longitude": 2.91102,
+      "heads": 8
+    },
+    {
+      "index": 2,
+      "role": "launchpad",
+      "latitude": 1.62227,
+      "longitude": 2.92213,
+      "heads": 0
+    },
+    {
+      "index": 3,
+      "role": "factory",
+      "latitude": 1.6102,
+      "longitude": 2.92304,
+      "heads": 0
+    },
+    {
+      "index": 4,
+      "role": "factory",
+      "latitude": 1.63435,
+      "longitude": 2.92119,
+      "heads": 0
+    },
+    {
+      "index": 5,
+      "role": "factory",
+      "latitude": 1.62953,
+      "longitude": 2.93225,
+      "heads": 0
+    },
+    {
+      "index": 6,
+      "role": "factory",
+      "latitude": 1.61726,
+      "longitude": 2.93317,
+      "heads": 0
+    },
+    {
+      "index": 7,
+      "role": "launchpad",
+      "latitude": 1.60289,
+      "longitude": 2.91243,
+      "heads": 0
+    }
+  ],
+  "links": [
+    {
+      "D": 3,
+      "Lv": 0,
+      "S": 1
+    },
+    {
+      "D": 3,
+      "Lv": 0,
+      "S": 2
+    },
+    {
+      "D": 7,
+      "Lv": 0,
+      "S": 6
+    },
+    {
+      "D": 8,
+      "Lv": 0,
+      "S": 4
+    },
+    {
+      "D": 6,
+      "Lv": 0,
+      "S": 5
+    },
+    {
+      "D": 5,
+      "Lv": 0,
+      "S": 3
+    },
+    {
+      "D": 7,
+      "Lv": 0,
+      "S": 4
+    }
+  ],
+  "route_patterns": [
+    {
+      "path": [
+        2,
+        3
+      ],
+      "quantity": 138336,
+      "role": "input"
+    },
+    {
+      "path": [
+        4,
+        8
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        7,
+        4,
+        8
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        6,
+        7,
+        4,
+        8
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        5,
+        6,
+        7,
+        4,
+        8
+      ],
+      "quantity": 20,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6,
+        7,
+        4
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6,
+        7
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        3,
+        5,
+        6,
+        7,
+        4
+      ],
+      "quantity": 3000,
+      "role": "input"
+    },
+    {
+      "path": [
+        1,
+        3
+      ],
+      "quantity": 140832,
+      "role": "input"
+    }
+  ]
+}

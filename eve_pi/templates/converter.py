@@ -13,7 +13,7 @@ def convert_template(
     if not game_data:
         game_data = GameData.load()
 
-    # Build reverse lookup from the SOURCE planet type only (avoids ID collisions)
+    # Build reverse lookup from the SOURCE planet type first (avoids ID collisions)
     old_structure_to_role = {}
     old_pln_id = template.get("Pln")
     for pt in game_data.planet_types.values():
@@ -21,11 +21,16 @@ def convert_template(
             for role, sid in pt.structures.items():
                 old_structure_to_role[sid] = role
             break
-    # Fallback: if source planet not identified, use all planet types
-    if not old_structure_to_role:
-        for pt in game_data.planet_types.values():
-            for role, sid in pt.structures.items():
-                old_structure_to_role[sid] = role
+    # Also check all planet types for any structure IDs not yet mapped
+    # (handles templates with cross-planet-type structures, e.g., Ice launchpad on Barren)
+    all_structure_to_role = {}
+    for pt in game_data.planet_types.values():
+        for role, sid in pt.structures.items():
+            if sid not in all_structure_to_role:
+                all_structure_to_role[sid] = role
+    for sid, role in all_structure_to_role.items():
+        if sid not in old_structure_to_role:
+            old_structure_to_role[sid] = role
 
     # Find old product type ID from pins
     old_product_id = None

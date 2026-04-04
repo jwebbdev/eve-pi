@@ -1,0 +1,570 @@
+{
+  "name": "factory_3input",
+  "ccu_level": 5,
+  "diameter": 5820.0,
+  "pins": [
+    {
+      "index": 0,
+      "role": "factory",
+      "latitude": 1.10907,
+      "longitude": 1.53804,
+      "heads": 0
+    },
+    {
+      "index": 1,
+      "role": "factory",
+      "latitude": 1.13032,
+      "longitude": 1.53929,
+      "heads": 0
+    },
+    {
+      "index": 2,
+      "role": "factory",
+      "latitude": 1.13015,
+      "longitude": 1.55269,
+      "heads": 0
+    },
+    {
+      "index": 3,
+      "role": "factory",
+      "latitude": 1.10846,
+      "longitude": 1.55143,
+      "heads": 0
+    },
+    {
+      "index": 4,
+      "role": "factory",
+      "latitude": 1.09801,
+      "longitude": 1.53222,
+      "heads": 0
+    },
+    {
+      "index": 5,
+      "role": "factory",
+      "latitude": 1.14092,
+      "longitude": 1.55882,
+      "heads": 0
+    },
+    {
+      "index": 6,
+      "role": "factory",
+      "latitude": 1.09774,
+      "longitude": 1.55779,
+      "heads": 0
+    },
+    {
+      "index": 7,
+      "role": "factory",
+      "latitude": 1.12019,
+      "longitude": 1.53191,
+      "heads": 0
+    },
+    {
+      "index": 8,
+      "role": "factory",
+      "latitude": 1.11867,
+      "longitude": 1.57243,
+      "heads": 0
+    },
+    {
+      "index": 9,
+      "role": "factory",
+      "latitude": 1.11918,
+      "longitude": 1.55895,
+      "heads": 0
+    },
+    {
+      "index": 10,
+      "role": "launchpad",
+      "latitude": 1.11954,
+      "longitude": 1.54545,
+      "heads": 0
+    },
+    {
+      "index": 11,
+      "role": "factory",
+      "latitude": 1.14128,
+      "longitude": 1.53273,
+      "heads": 0
+    },
+    {
+      "index": 12,
+      "role": "factory",
+      "latitude": 1.12045,
+      "longitude": 1.51829,
+      "heads": 0
+    }
+  ],
+  "links": [
+    {
+      "D": 6,
+      "Lv": 0,
+      "S": 3
+    },
+    {
+      "D": 4,
+      "Lv": 0,
+      "S": 11
+    },
+    {
+      "D": 1,
+      "Lv": 0,
+      "S": 11
+    },
+    {
+      "D": 11,
+      "Lv": 0,
+      "S": 10
+    },
+    {
+      "D": 13,
+      "Lv": 0,
+      "S": 8
+    },
+    {
+      "D": 5,
+      "Lv": 0,
+      "S": 1
+    },
+    {
+      "D": 3,
+      "Lv": 0,
+      "S": 11
+    },
+    {
+      "D": 2,
+      "Lv": 0,
+      "S": 11
+    },
+    {
+      "D": 7,
+      "Lv": 0,
+      "S": 4
+    },
+    {
+      "D": 8,
+      "Lv": 0,
+      "S": 11
+    },
+    {
+      "D": 10,
+      "Lv": 0,
+      "S": 9
+    },
+    {
+      "D": 12,
+      "Lv": 0,
+      "S": 2
+    }
+  ],
+  "route_patterns": [
+    {
+      "path": [
+        11,
+        8,
+        13
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        8,
+        13
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4,
+        7
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4,
+        7
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1,
+        5
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1,
+        5
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        8
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        8
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        8,
+        13
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        2
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        2
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        2,
+        12
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        2,
+        12
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3,
+        6
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3,
+        6
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10,
+        9
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10,
+        9
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        4,
+        7
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        1,
+        5
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        8
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        7,
+        4,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        4,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        11,
+        2,
+        12
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        5,
+        1,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        8,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        13,
+        8,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        2,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        12,
+        2,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        3,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        6,
+        3,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        10,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        9,
+        10,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    },
+    {
+      "path": [
+        11,
+        2
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3,
+        6
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        10,
+        9
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        11,
+        3
+      ],
+      "quantity": 10,
+      "role": "input"
+    },
+    {
+      "path": [
+        1,
+        11
+      ],
+      "quantity": 3,
+      "role": "output"
+    }
+  ]
+}
