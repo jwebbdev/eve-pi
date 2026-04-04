@@ -264,7 +264,11 @@ def _find_reference_template(product: str, setup_value: str) -> Optional[dict]:
                     return json.load(f)
         return None
 
-    # For factories, look for Factory templates
+    # R0→P2 is a hybrid setup — no reference templates available
+    if setup_value == "r0_to_p2":
+        return None
+
+    # For factories (p1_to_p2, p2_to_p3, p3_to_p4), look for Factory templates
     path = REFERENCE_TEMPLATES_DIR / f"Factory - {product}.json"
     if path.exists():
         with open(path, "r", encoding="utf-8") as f:
