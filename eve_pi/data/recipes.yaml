@@ -1,0 +1,75 @@
+r0_to_p1:
+  Water: {input: Aqueous Liquids, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Industrial Fibers: {input: Autotrophs, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Reactive Metals: {input: Base Metals, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Biofuels: {input: Carbon Compounds, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Proteins: {input: Complex Organisms, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Silicon: {input: Felsic Magma, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Toxic Metals: {input: Heavy Metals, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Electrolytes: {input: Ionic Solutions, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Bacteria: {input: Microorganisms, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Oxygen: {input: Noble Gas, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Precious Metals: {input: Noble Metals, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Chiral Structures: {input: Non-CS Crystals, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Biomass: {input: Planktic Colonies, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Oxidizing Compound: {input: Reactive Gas, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+  Plasmoids: {input: Suspended Plasma, r0_per_cycle: 3000, p1_per_cycle: 20, cycle_seconds: 1800}
+
+p1_to_p2:
+  Biocells: {inputs: [[Biofuels, 40], [Precious Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Construction Blocks: {inputs: [[Reactive Metals, 40], [Toxic Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Consumer Electronics: {inputs: [[Chiral Structures, 40], [Toxic Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Coolant: {inputs: [[Electrolytes, 40], [Water, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Enriched Uranium: {inputs: [[Precious Metals, 40], [Toxic Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Fertilizer: {inputs: [[Bacteria, 40], [Proteins, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Genetically Enhanced Livestock: {inputs: [[Proteins, 40], [Biomass, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Livestock: {inputs: [[Biofuels, 40], [Proteins, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Mechanical Parts: {inputs: [[Precious Metals, 40], [Reactive Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Microfiber Shielding: {inputs: [[Industrial Fibers, 40], [Silicon, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Miniature Electronics: {inputs: [[Chiral Structures, 40], [Silicon, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Nanites: {inputs: [[Bacteria, 40], [Reactive Metals, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Oxides: {inputs: [[Oxidizing Compound, 40], [Oxygen, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Polyaramids: {inputs: [[Industrial Fibers, 40], [Oxidizing Compound, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Polytextiles: {inputs: [[Biofuels, 40], [Industrial Fibers, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Rocket Fuel: {inputs: [[Electrolytes, 40], [Plasmoids, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Silicate Glass: {inputs: [[Oxidizing Compound, 40], [Silicon, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Superconductors: {inputs: [[Plasmoids, 40], [Water, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Supertensile Plastics: {inputs: [[Biomass, 40], [Oxygen, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Synthetic Oil: {inputs: [[Electrolytes, 40], [Oxygen, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Test Cultures: {inputs: [[Bacteria, 40], [Water, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Transmitter: {inputs: [[Chiral Structures, 40], [Plasmoids, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Viral Agent: {inputs: [[Bacteria, 40], [Biomass, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+  Water-Cooled CPU: {inputs: [[Reactive Metals, 40], [Water, 40]], output_per_cycle: 5, cycle_seconds: 3600}
+
+p2_to_p3:
+  Biotech Research Reports: {inputs: [[Construction Blocks, 10], [Livestock, 10], [Nanites, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Camera Drones: {inputs: [[Rocket Fuel, 10], [Silicate Glass, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Condensates: {inputs: [[Coolant, 10], [Oxides, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Cryoprotectant Solution: {inputs: [[Fertilizer, 10], [Synthetic Oil, 10], [Test Cultures, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Data Chips: {inputs: [[Microfiber Shielding, 10], [Supertensile Plastics, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Gel-Matrix Biopaste: {inputs: [[Biocells, 10], [Oxides, 10], [Superconductors, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Guidance Systems: {inputs: [[Transmitter, 10], [Water-Cooled CPU, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Hazmat Detection Systems: {inputs: [[Polytextiles, 10], [Transmitter, 10], [Viral Agent, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Hermetic Membranes: {inputs: [[Genetically Enhanced Livestock, 10], [Polyaramids, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  High-Tech Transmitters: {inputs: [[Polyaramids, 10], [Transmitter, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Industrial Explosives: {inputs: [[Fertilizer, 10], [Polytextiles, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Neocoms: {inputs: [[Biocells, 10], [Silicate Glass, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Nuclear Reactors: {inputs: [[Enriched Uranium, 10], [Microfiber Shielding, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Planetary Vehicles: {inputs: [[Mechanical Parts, 10], [Miniature Electronics, 10], [Supertensile Plastics, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Robotics: {inputs: [[Consumer Electronics, 10], [Mechanical Parts, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Smartfab Units: {inputs: [[Construction Blocks, 10], [Miniature Electronics, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Supercomputers: {inputs: [[Consumer Electronics, 10], [Coolant, 10], [Water-Cooled CPU, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Synthetic Synapses: {inputs: [[Supertensile Plastics, 10], [Test Cultures, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Transcranial Microcontrollers: {inputs: [[Biocells, 10], [Nanites, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Ukomi Superconductors: {inputs: [[Superconductors, 10], [Synthetic Oil, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+  Vaccines: {inputs: [[Livestock, 10], [Viral Agent, 10]], output_per_cycle: 3, cycle_seconds: 3600}
+
+p3_to_p4:
+  Broadcast Node: {inputs: [[Neocoms, 6], [Data Chips, 6], [High-Tech Transmitters, 6]], output_per_cycle: 1, cycle_seconds: 3600}
+  Integrity Response Drones: {inputs: [[Gel-Matrix Biopaste, 6], [Hazmat Detection Systems, 6], [Planetary Vehicles, 6]], output_per_cycle: 1, cycle_seconds: 3600}
+  Nano-Factory: {inputs: [[Industrial Explosives, 6], [Ukomi Superconductors, 6], [Reactive Metals, 40]], output_per_cycle: 1, cycle_seconds: 3600}
+  Organic Mortar Applicators: {inputs: [[Condensates, 6], [Robotics, 6], [Bacteria, 40]], output_per_cycle: 1, cycle_seconds: 3600}
+  Recursive Computing Module: {inputs: [[Synthetic Synapses, 6], [Guidance Systems, 6], [Transcranial Microcontrollers, 6]], output_per_cycle: 1, cycle_seconds: 3600}
+  Self-Harmonizing Power Core: {inputs: [[Camera Drones, 6], [Nuclear Reactors, 6], [Hermetic Membranes, 6]], output_per_cycle: 1, cycle_seconds: 3600}
+  Sterile Conduits: {inputs: [[Smartfab Units, 6], [Vaccines, 6], [Water, 40]], output_per_cycle: 1, cycle_seconds: 3600}
+  Wetware Mainframe: {inputs: [[Supercomputers, 6], [Biotech Research Reports, 6], [Cryoprotectant Solution, 6]], output_per_cycle: 1, cycle_seconds: 3600}

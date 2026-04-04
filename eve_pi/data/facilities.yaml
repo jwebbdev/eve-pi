@@ -1,0 +1,47 @@
+facilities:
+  basic_factory:
+    name: Basic Industry Facility
+    cpu_tf: 200
+    power_mw: 800
+  advanced_factory:
+    name: Advanced Industry Facility
+    cpu_tf: 500
+    power_mw: 700
+  hightech_factory:
+    name: High-Tech Production Plant
+    cpu_tf: 1100
+    power_mw: 400
+  launchpad:
+    name: Launchpad
+    cpu_tf: 3600
+    power_mw: 700
+    storage_m3: 10000
+  storage:
+    name: Storage Facility
+    cpu_tf: 500
+    power_mw: 700
+    storage_m3: 12000
+  extractor_head:
+    name: Extractor Head
+    cpu_tf: 110
+    power_mw: 550
+
+command_center_levels:
+  0: {cpu_tf: 1675, power_mw: 6000, storage_m3: 500}
+  1: {cpu_tf: 7057, power_mw: 9000, storage_m3: 500}
+  2: {cpu_tf: 12136, power_mw: 12000, storage_m3: 500}
+  3: {cpu_tf: 17215, power_mw: 15000, storage_m3: 500}
+  4: {cpu_tf: 21315, power_mw: 17000, storage_m3: 500}
+  5: {cpu_tf: 25415, power_mw: 19000, storage_m3: 500}
+
+link_formulas:
+  distance_intercept: -0.7716
+  distance_slope: 0.012182
+  power_intercept: 10.9952
+  power_slope: 0.1433
+  cpu_intercept: 15.6475
+  cpu_slope: 0.1995
+
+extraction_decay:
+  decay_factor: 0.012
+  noise_factor: 0.8

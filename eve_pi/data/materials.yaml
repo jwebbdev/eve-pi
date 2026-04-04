@@ -1,0 +1,92 @@
+r0:
+  Aqueous Liquids: {type_id: 2268, volume_m3: 0.01}
+  Autotrophs: {type_id: 2305, volume_m3: 0.01}
+  Base Metals: {type_id: 2267, volume_m3: 0.01}
+  Carbon Compounds: {type_id: 2288, volume_m3: 0.01}
+  Complex Organisms: {type_id: 2287, volume_m3: 0.01}
+  Felsic Magma: {type_id: 2307, volume_m3: 0.01}
+  Heavy Metals: {type_id: 2272, volume_m3: 0.01}
+  Ionic Solutions: {type_id: 2309, volume_m3: 0.01}
+  Microorganisms: {type_id: 2073, volume_m3: 0.01}
+  Noble Gas: {type_id: 2310, volume_m3: 0.01}
+  Noble Metals: {type_id: 2270, volume_m3: 0.01}
+  Non-CS Crystals: {type_id: 2306, volume_m3: 0.01}
+  Planktic Colonies: {type_id: 2286, volume_m3: 0.01}
+  Reactive Gas: {type_id: 2311, volume_m3: 0.01}
+  Suspended Plasma: {type_id: 2308, volume_m3: 0.01}
+
+p1:
+  Water: {type_id: 3645, volume_m3: 0.38}
+  Industrial Fibers: {type_id: 2397, volume_m3: 0.38}
+  Reactive Metals: {type_id: 2398, volume_m3: 0.38}
+  Biofuels: {type_id: 2396, volume_m3: 0.38}
+  Proteins: {type_id: 2395, volume_m3: 0.38}
+  Silicon: {type_id: 9828, volume_m3: 0.38}
+  Toxic Metals: {type_id: 2400, volume_m3: 0.38}
+  Electrolytes: {type_id: 2390, volume_m3: 0.38}
+  Bacteria: {type_id: 2393, volume_m3: 0.38}
+  Oxygen: {type_id: 3683, volume_m3: 0.38}
+  Precious Metals: {type_id: 2399, volume_m3: 0.38}
+  Chiral Structures: {type_id: 2401, volume_m3: 0.38}
+  Biomass: {type_id: 3779, volume_m3: 0.38}
+  Oxidizing Compound: {type_id: 2392, volume_m3: 0.38}
+  Plasmoids: {type_id: 2389, volume_m3: 0.38}
+
+p2:
+  Biocells: {type_id: 2329, volume_m3: 0.75}
+  Construction Blocks: {type_id: 3828, volume_m3: 0.75}
+  Consumer Electronics: {type_id: 9836, volume_m3: 0.75}
+  Coolant: {type_id: 9832, volume_m3: 0.75}
+  Enriched Uranium: {type_id: 44, volume_m3: 0.75}
+  Fertilizer: {type_id: 3693, volume_m3: 0.75}
+  Genetically Enhanced Livestock: {type_id: 15317, volume_m3: 0.75}
+  Livestock: {type_id: 3725, volume_m3: 0.75}
+  Mechanical Parts: {type_id: 3689, volume_m3: 0.75}
+  Microfiber Shielding: {type_id: 2327, volume_m3: 0.75}
+  Miniature Electronics: {type_id: 9842, volume_m3: 0.75}
+  Nanites: {type_id: 2463, volume_m3: 0.75}
+  Oxides: {type_id: 2317, volume_m3: 0.75}
+  Polyaramids: {type_id: 2321, volume_m3: 0.75}
+  Polytextiles: {type_id: 3695, volume_m3: 0.75}
+  Rocket Fuel: {type_id: 9830, volume_m3: 0.75}
+  Silicate Glass: {type_id: 3697, volume_m3: 0.75}
+  Superconductors: {type_id: 9838, volume_m3: 0.75}
+  Supertensile Plastics: {type_id: 2312, volume_m3: 0.75}
+  Synthetic Oil: {type_id: 3691, volume_m3: 0.75}
+  Test Cultures: {type_id: 2319, volume_m3: 0.75}
+  Transmitter: {type_id: 9840, volume_m3: 0.75}
+  Viral Agent: {type_id: 3775, volume_m3: 0.75}
+  Water-Cooled CPU: {type_id: 2328, volume_m3: 0.75}
+
+p3:
+  Biotech Research Reports: {type_id: 2358, volume_m3: 1.50}
+  Camera Drones: {type_id: 2345, volume_m3: 1.50}
+  Condensates: {type_id: 2344, volume_m3: 1.50}
+  Cryoprotectant Solution: {type_id: 2367, volume_m3: 1.50}
+  Data Chips: {type_id: 17392, volume_m3: 1.50}
+  Gel-Matrix Biopaste: {type_id: 2348, volume_m3: 1.50}
+  Guidance Systems: {type_id: 9834, volume_m3: 1.50}
+  Hazmat Detection Systems: {type_id: 2366, volume_m3: 1.50}
+  Hermetic Membranes: {type_id: 2361, volume_m3: 1.50}
+  High-Tech Transmitters: {type_id: 17898, volume_m3: 1.50}
+  Industrial Explosives: {type_id: 2360, volume_m3: 1.50}
+  Neocoms: {type_id: 2354, volume_m3: 1.50}
+  Nuclear Reactors: {type_id: 2352, volume_m3: 1.50}
+  Planetary Vehicles: {type_id: 9846, volume_m3: 1.50}
+  Robotics: {type_id: 9848, volume_m3: 1.50}
+  Smartfab Units: {type_id: 2351, volume_m3: 1.50}
+  Supercomputers: {type_id: 2349, volume_m3: 1.50}
+  Synthetic Synapses: {type_id: 2346, volume_m3: 1.50}
+  Transcranial Microcontrollers: {type_id: 12836, volume_m3: 1.50}
+  Ukomi Superconductors: {type_id: 17136, volume_m3: 1.50}
+  Vaccines: {type_id: 28974, volume_m3: 1.50}
+
+p4:
+  Broadcast Node: {type_id: 2867, volume_m3: 100.0}
+  Integrity Response Drones: {type_id: 2868, volume_m3: 100.0}
+  Nano-Factory: {type_id: 2869, volume_m3: 100.0}
+  Organic Mortar Applicators: {type_id: 2870, volume_m3: 100.0}
+  Recursive Computing Module: {type_id: 2871, volume_m3: 100.0}
+  Self-Harmonizing Power Core: {type_id: 2872, volume_m3: 100.0}
+  Sterile Conduits: {type_id: 2875, volume_m3: 100.0}
+  Wetware Mainframe: {type_id: 2876, volume_m3: 100.0}
