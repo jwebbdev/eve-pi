@@ -13,15 +13,10 @@
         <div>
             <select id="configSelect" onchange="loadConfig(this.value)">
                 <option value="">-- Load a saved config --</option>
-                {% if saved_configs %}
-                    {% for cfg in saved_configs %}
-                    <option value="{{ cfg }}" {{ 'selected' if loaded_config == cfg }}>{{ cfg }}</option>
-                    {% endfor %}
-                {% endif %}
             </select>
         </div>
         <div class="narrow">
-            <input type="text" id="configName" placeholder="Config name" value="{{ loaded_config or '' }}">
+            <input type="text" id="configName" placeholder="Config name">
         </div>
         <div class="action">
             <button type="button" class="btn btn-sm" onclick="saveConfig()" style="margin-right:5px">Save</button>
@@ -285,7 +280,27 @@
         document.getElementById('processingOverlay').classList.add('active');
     });
 
-    // --- Config save/load ---
+    // --- Config save/load (localStorage) ---
+    const STORAGE_KEY = 'eve_pi_configs';
+
+    function getConfigs() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+        catch { return {}; }
+    }
+
+    function refreshConfigDropdown(selectedName) {
+        const select = document.getElementById('configSelect');
+        const configs = getConfigs();
+        select.innerHTML = '<option value="">-- Load a saved config --</option>';
+        Object.keys(configs).sort().forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (name === selectedName) opt.selected = true;
+            select.appendChild(opt);
+        });
+    }
+
     function gatherFormData() {
         const chars = [];
         document.querySelectorAll('#characters .dynamic-item').forEach(item => {
@@ -313,25 +328,76 @@
         };
     }
 
+    function applyFormData(data) {
+        if (data.system) document.getElementById('system').value = data.system;
+        if (data.cycle_days) document.getElementById('cycle_days').value = data.cycle_days;
+        if (data.trips_per_week) document.getElementById('trips_per_week').value = data.trips_per_week;
+        if (data.cargo_m3) document.getElementById('cargo_m3').value = data.cargo_m3;
+        if (data.tax_rate) document.getElementById('tax_rate').value = data.tax_rate;
+        if (data.mode) {
+            const radio = document.querySelector(`input[name="mode"][value="${data.mode}"]`);
+            if (radio) radio.checked = true;
+        }
+        // Rebuild characters
+        if (data.characters && data.characters.length > 0) {
+            const container = document.getElementById('characters');
+            container.innerHTML = '';
+            data.characters.forEach(char => {
+                const div = document.createElement('div');
+                div.className = 'dynamic-item';
+                div.setAttribute('data-type', 'character');
+                let ccuOpts = '', planetOpts = '';
+                for (let i = 0; i <= 5; i++) ccuOpts += `<option value="${i}" ${char.ccu_level === i ? 'selected' : ''}>${i}</option>`;
+                for (let i = 1; i <= 6; i++) planetOpts += `<option value="${i}" ${char.max_planets === i ? 'selected' : ''}>${i}</option>`;
+                div.innerHTML = `
+                    <div><label>Name</label><input type="text" name="char_name" value="${char.name}"></div>
+                    <div class="narrow"><label>CCU Level</label><select name="char_ccu">${ccuOpts}</select></div>
+                    <div class="narrow"><label>Max Planets</label><select name="char_max_planets">${planetOpts}</select></div>
+                    <div class="action"><button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button></div>
+                `;
+                container.appendChild(div);
+            });
+            charCount = data.characters.length;
+        }
+        // Rebuild manufacturing needs
+        if (data.manufacturing_needs && data.manufacturing_needs.length > 0) {
+            const container = document.getElementById('manufacturing');
+            container.innerHTML = '';
+            data.manufacturing_needs.forEach(need => {
+                const div = document.createElement('div');
+                div.className = 'dynamic-item';
+                div.setAttribute('data-type', 'manufacturing');
+                let selectHtml = productOptionsHTML.replace(
+                    `value="${need.product}"`,
+                    `value="${need.product}" selected`
+                );
+                div.innerHTML = `
+                    <div><label>Product</label><select name="mfg_product">${selectHtml}</select></div>
+                    <div class="narrow"><label>Qty/Week</label><input type="number" name="mfg_quantity" min="1" value="${need.quantity_per_week}"></div>
+                    <div class="action"><button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button></div>
+                `;
+                container.appendChild(div);
+            });
+        }
+    }
+
     function saveConfig() {
         const name = document.getElementById('configName').value.trim();
         if (!name) { alert('Enter a config name'); return; }
-        const data = gatherFormData();
-        fetch(`/api/configs/${encodeURIComponent(name)}`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data),
-        }).then(r => r.json()).then(result => {
-            if (result.status === 'saved') {
-                // Refresh to show in dropdown
-                window.location.href = `/?config=${encodeURIComponent(name)}`;
-            }
-        });
+        const configs = getConfigs();
+        configs[name] = gatherFormData();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(configs));
+        refreshConfigDropdown(name);
+        alert(`Config "${name}" saved.`);
     }
 
     function loadConfig(name) {
         if (!name) return;
-        window.location.href = `/?config=${encodeURIComponent(name)}`;
+        const configs = getConfigs();
+        if (configs[name]) {
+            applyFormData(configs[name]);
+            document.getElementById('configName').value = name;
+        }
     }
 
     function deleteConfig() {
@@ -339,9 +405,14 @@
                      document.getElementById('configSelect').value;
         if (!name) { alert('Select or enter a config name to delete'); return; }
         if (!confirm(`Delete config "${name}"?`)) return;
-        fetch(`/api/configs/${encodeURIComponent(name)}`, {method: 'DELETE'})
-            .then(r => r.json())
-            .then(() => window.location.href = '/');
+        const configs = getConfigs();
+        delete configs[name];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(configs));
+        document.getElementById('configName').value = '';
+        refreshConfigDropdown();
     }
+
+    // Initialize dropdown on page load
+    refreshConfigDropdown();
 </script>
 {% endblock %}

@@ -28,9 +28,6 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 # Load game data once at startup
 game_data = GameData.load()
 
-# Config storage directory
-CONFIGS_DIR = Path(__file__).parent.parent.parent / "configs"
-CONFIGS_DIR.mkdir(exist_ok=True)
 
 
 def _get_product_lists() -> dict:
@@ -61,24 +58,10 @@ async def home(request: Request):
     for tier in ("p1", "p2", "p3", "p4"):
         all_products.extend(products_by_tier[tier])
 
-    # Check if loading a saved config
-    config_name = request.query_params.get("config")
-    form_values = None
-    if config_name:
-        path = CONFIGS_DIR / f"{config_name}.json"
-        if path.exists():
-            with open(path, "r", encoding="utf-8") as f:
-                form_values = json.load(f)
-
-    saved_configs = sorted(f.stem for f in CONFIGS_DIR.glob("*.json"))
-
     return _render(request, "index.html",
                    products_by_tier=products_by_tier,
                    all_products=all_products,
-                   planet_types=_get_planet_type_names(),
-                   saved_configs=saved_configs,
-                   form_values=form_values,
-                   loaded_config=config_name or "")
+                   planet_types=_get_planet_type_names())
 
 
 @app.post("/optimize", response_class=HTMLResponse)
@@ -242,42 +225,6 @@ async def convert_template_route(request: Request):
     except Exception as e:
         return JSONResponse({"error": f"Conversion failed: {str(e)}"}, status_code=500)
 
-
-# --- Config save/load API ---
-
-@app.get("/api/configs", response_class=JSONResponse)
-async def list_configs():
-    configs = []
-    for f in sorted(CONFIGS_DIR.glob("*.json")):
-        configs.append(f.stem)
-    return JSONResponse({"configs": configs})
-
-
-@app.get("/api/configs/{name}", response_class=JSONResponse)
-async def load_config(name: str):
-    path = CONFIGS_DIR / f"{name}.json"
-    if not path.exists():
-        return JSONResponse({"error": f"Config '{name}' not found"}, status_code=404)
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return JSONResponse(data)
-
-
-@app.post("/api/configs/{name}", response_class=JSONResponse)
-async def save_config(name: str, request: Request):
-    body = await request.json()
-    path = CONFIGS_DIR / f"{name}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(body, f, indent=2)
-    return JSONResponse({"status": "saved", "name": name})
-
-
-@app.delete("/api/configs/{name}", response_class=JSONResponse)
-async def delete_config(name: str):
-    path = CONFIGS_DIR / f"{name}.json"
-    if path.exists():
-        path.unlink()
-    return JSONResponse({"status": "deleted", "name": name})
 
 
 if __name__ == "__main__":
