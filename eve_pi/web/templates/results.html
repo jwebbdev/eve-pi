@@ -219,10 +219,21 @@
     // Store current template params for regeneration
     let currentTemplateParams = {};
 
+    // Default LP counts per setup type
+    const defaultLpCounts = {
+        'r0_to_p1': 1,
+        'r0_to_p2': 1,
+        'p1_to_p2': 4,
+        'p2_to_p3': 3,
+        'p3_to_p4': 2,
+    };
+
     function getTemplate(setup, planetType, product, planetId, character) {
         currentTemplateParams = {setup, planetType, product, planetId, character};
-        const lpCount = document.getElementById('templateLpCount').value;
-        _fetchTemplate(setup, planetType, product, planetId, character, lpCount);
+        // Set LP dropdown to smart default for this setup type
+        const defaultLp = defaultLpCounts[setup] || 4;
+        document.getElementById('templateLpCount').value = defaultLp;
+        _fetchTemplate(setup, planetType, product, planetId, character, defaultLp);
     }
 
     function regenerateTemplate() {
