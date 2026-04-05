@@ -60,7 +60,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day * 7) }}</td>
-                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}', {{ a.planet_id }}, '{{ a.character }}')">Template</button></td>
             </tr>
             {% set feeders = feed_by_factory.get(a.product, []) %}
             {% for fa in feeders %}
@@ -72,7 +72,7 @@
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
-                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}')">Template</button></td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}', {{ fa.planet_id }}, '{{ fa.character }}')">Template</button></td>
             </tr>
             {% endfor %}
             {% endfor %}
@@ -116,7 +116,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
-                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}', {{ a.planet_id }}, '{{ a.character }}')">Template</button></td>
             </tr>
             {% set feeders = feed_by_factory.get(a.product, []) %}
             {% for fa in feeders %}
@@ -128,7 +128,7 @@
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
-                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}')">Template</button></td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ fa.setup.value }}', '{{ fa.planet_type }}', '{{ fa.product }}', {{ fa.planet_id }}, '{{ fa.character }}')">Template</button></td>
             </tr>
             {% endfor %}
             {% endfor %}
@@ -167,7 +167,7 @@
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
-                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}')">Template</button></td>
+                <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}', {{ a.planet_id }}, '{{ a.character }}')">Template</button></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -199,8 +199,16 @@
 
 {% block scripts %}
 <script>
-    function getTemplate(setup, planetType, product) {
-        fetch(`/api/template/${encodeURIComponent(setup)}/${encodeURIComponent(planetType)}/${encodeURIComponent(product)}`)
+    // Planet radii, character CCU, and cycle days from server
+    const planetRadii = {{ planet_radii | tojson }};
+    const charCcu = {{ char_ccu | tojson }};
+    const restockDays = {{ form_values.restock_days if form_values and form_values.restock_days else constraints.cycle_days }};
+
+    function getTemplate(setup, planetType, product, planetId, character) {
+        const radius = planetRadii[planetId] || 5000;
+        const ccu = charCcu[character] || 5;
+        const params = `?radius_km=${radius}&ccu_level=${ccu}&cycle_days=${restockDays}`;
+        fetch(`/api/template/${encodeURIComponent(setup)}/${encodeURIComponent(planetType)}/${encodeURIComponent(product)}${params}`)
             .then(r => r.json())
             .then(data => {
                 if (data.error) {

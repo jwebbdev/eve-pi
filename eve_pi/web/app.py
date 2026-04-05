@@ -87,6 +87,7 @@ async def run_optimization(request: Request):
     system_name = form.get("system", "").strip()
     mode = form.get("mode", "self_sufficient")
     cycle_days = float(form.get("cycle_days", 4))
+    restock_days = float(form.get("restock_days", 4))
     trips_per_week = int(form.get("trips_per_week", 2))
     cargo_m3 = float(form.get("cargo_m3", 60000))
     tax_rate = float(form.get("tax_rate", 0.05))
@@ -122,6 +123,7 @@ async def run_optimization(request: Request):
         "system": system_name,
         "mode": mode,
         "cycle_days": cycle_days,
+        "restock_days": restock_days,
         "trips_per_week": trips_per_week,
         "cargo_m3": cargo_m3,
         "tax_rate": tax_rate,
@@ -203,10 +205,18 @@ async def run_optimization(request: Request):
             feed_by_factory[factory_product] = []
         feed_by_factory[factory_product].append(a)
 
+    # Build planet radius map for template generation
+    planet_radii = {p.planet_id: p.radius_km for p in system.planets}
+
+    # Build character CCU map
+    char_ccu = {c.name: c.ccu_level for c in characters}
+
     return _render(request, "results.html",
                    result=result,
                    constraints=constraints,
                    feed_by_factory=feed_by_factory,
+                   planet_radii=planet_radii,
+                   char_ccu=char_ccu,
                    form_values=form_values)
 
 
@@ -285,11 +295,12 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
     """Generate an importable template for a specific setup."""
     radius_km = float(request.query_params.get("radius_km", 5000))
     ccu_level = int(request.query_params.get("ccu_level", 5))
+    cycle_days = float(request.query_params.get("cycle_days", 4))
 
     # Try the generator first (covers all setup types)
     template = gen_template(setup, planet_type, product,
                             radius_km=radius_km, ccu_level=ccu_level,
-                            game_data=game_data)
+                            game_data=game_data, cycle_days=cycle_days)
     if template:
         return JSONResponse({"template": template})
 

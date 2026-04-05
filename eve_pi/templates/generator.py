@@ -20,6 +20,7 @@ def generate_template(
     radius_km: float = 5000.0,
     ccu_level: int = 5,
     game_data: GameData = None,
+    cycle_days: float = 4.0,
 ) -> Optional[dict]:
     """Generate a complete EVE-importable template JSON dict.
 
@@ -30,6 +31,7 @@ def generate_template(
         radius_km: Planet radius in km.
         ccu_level: Command Center Upgrade skill level (0-5).
         game_data: GameData instance; loaded fresh if None.
+        cycle_days: Restocking cycle in days (affects LP count for factory setups).
 
     Returns:
         Template dict ready for JSON export, or None if the setup cannot fit.
@@ -52,7 +54,7 @@ def generate_template(
     if gen is None:
         return None
 
-    return gen(planet_type, product, radius_km, ccu_level, game_data)
+    return gen(planet_type, product, radius_km, ccu_level, game_data, cycle_days)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +183,7 @@ def _parent_pin(index: int, pin_a: int = 1, pin_b: int = 2) -> int:
 
 def _generate_r0_to_p1(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     recipe = game_data.get_recipe("r0_to_p1", product)
     if not recipe:
@@ -308,7 +310,7 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
 
 def _generate_r0_to_p2(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     p2_recipe = game_data.get_recipe("p1_to_p2", product)
     if not p2_recipe:
@@ -450,13 +452,11 @@ def _generate_r0_to_p2(planet_type_name: str, product: str,
 
 def _generate_p1_to_p2(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
-        recipe_tier="p1_to_p2",
-        setup_type=SetupType.P1_TO_P2,
-        factory_key="advanced_factory",
-        label_prefix="P1-P2",
+        recipe_tier="p1_to_p2", setup_type=SetupType.P1_TO_P2,
+        factory_key="advanced_factory", label_prefix="P1-P2", cycle_days=cycle_days,
     )
 
 
@@ -466,13 +466,11 @@ def _generate_p1_to_p2(planet_type_name: str, product: str,
 
 def _generate_p2_to_p3(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
-        recipe_tier="p2_to_p3",
-        setup_type=SetupType.P2_TO_P3,
-        factory_key="advanced_factory",
-        label_prefix="P2-P3",
+        recipe_tier="p2_to_p3", setup_type=SetupType.P2_TO_P3,
+        factory_key="advanced_factory", label_prefix="P2-P3", cycle_days=cycle_days,
     )
 
 
@@ -482,17 +480,15 @@ def _generate_p2_to_p3(planet_type_name: str, product: str,
 
 def _generate_p3_to_p4(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     if not pt.p4_capable:
         return None
 
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
-        recipe_tier="p3_to_p4",
-        setup_type=SetupType.P3_TO_P4,
-        factory_key="hightech_factory",
-        label_prefix="P3-P4",
+        recipe_tier="p3_to_p4", setup_type=SetupType.P3_TO_P4,
+        factory_key="hightech_factory", label_prefix="P3-P4", cycle_days=cycle_days,
     )
 
 
@@ -510,17 +506,22 @@ def _generate_factory_setup(
     setup_type: SetupType,
     factory_key: str,
     label_prefix: str,
+    cycle_days: float = 4.0,
 ) -> Optional[dict]:
+    from eve_pi.capacity.planet_capacity import calculate_lp_count
+
     pt = game_data.planet_types[planet_type_name]
     recipe = game_data.get_recipe(recipe_tier, product)
     if not recipe:
         return None
 
-    fits, max_factories, details = can_fit(radius_km, ccu_level, setup_type, game_data)
+    fits, max_factories, details = can_fit(radius_km, ccu_level, setup_type, game_data,
+                                           product_name=product, cycle_days=cycle_days)
     if not fits:
         return None
 
     num_factories = details.get("max_factories", max_factories)
+    num_lps = details.get("launchpad_count", 1)
     product_id = game_data.materials[product].type_id
 
     # Resolve input material IDs
@@ -531,15 +532,25 @@ def _generate_factory_setup(
     step = _angular_step(radius_km)
     cx, cy = 1.5, 3.0
 
-    # Build hub pin: LP at center
+    # Build hub pins: LPs at center
     pins: List[dict] = []
     links: List[dict] = []
 
-    # LP 1 (pin 1)
+    # LP 1 (pin 1) at center
     pins.append({"H": 0, "La": float(round(cx, 5)), "Lo": float(round(cy, 5)),
                  "S": None, "T": pt.structures["launchpad"]})
 
-    # Place factories in a tree radiating from LP
+    # Additional LPs around center
+    lp_offsets = [(step, 0), (-step, 0), (0, step), (0, -step),
+                  (step, step), (-step, step)]
+    for lp_i in range(1, num_lps):
+        off_la, off_lo = lp_offsets[(lp_i - 1) % len(lp_offsets)]
+        pins.append({"H": 0, "La": float(round(cx + off_la, 5)),
+                     "Lo": float(round(cy + off_lo, 5)),
+                     "S": None, "T": pt.structures["launchpad"]})
+        links.append({"D": len(pins), "Lv": 0, "S": 1})  # link to LP1
+
+    # Place factories in a tree radiating from LP cluster
     factory_start = len(pins) + 1  # 1-indexed pin number of first factory
     tree = _hex_grid_positions(cx, cy, step, num_factories)
 
@@ -585,7 +596,7 @@ def _generate_factory_setup(
 
     return {
         "CmdCtrLv": ccu_level,
-        "Cmt": f"{label_prefix} {product} on {planet_type_name} ({num_factories} factories)",
+        "Cmt": f"{label_prefix} {product} on {planet_type_name} ({num_factories} fac, {num_lps} LP, {cycle_days}d cycle)",
         "Diam": round(radius_km * 2.0, 1),
         "L": links,
         "P": pins,
