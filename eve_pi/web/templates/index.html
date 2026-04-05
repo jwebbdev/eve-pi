@@ -42,12 +42,6 @@
                        title="How often you restart extractors">
             </div>
             <div class="narrow">
-                <label for="restock_days">Restock Days</label>
-                <input type="number" id="restock_days" name="restock_days" step="0.5" min="0.5" max="30"
-                       value="{{ form_values.restock_days if form_values else '4' }}"
-                       title="How often you deliver supplies to factory planets. More days = more LPs, fewer factories.">
-            </div>
-            <div class="narrow">
                 <label for="trips_per_week">Trips/Week</label>
                 <input type="number" id="trips_per_week" name="trips_per_week" min="1" max="999"
                        value="{{ form_values.trips_per_week if form_values else '2' }}"
@@ -307,7 +301,6 @@
             system: document.getElementById('system').value,
             mode: document.querySelector('input[name="mode"]:checked')?.value || 'self_sufficient',
             cycle_days: parseFloat(document.getElementById('cycle_days').value),
-            restock_days: parseFloat(document.getElementById('restock_days').value),
             trips_per_week: parseInt(document.getElementById('trips_per_week').value),
             cargo_m3: parseFloat(document.getElementById('cargo_m3').value),
             tax_rate: parseFloat(document.getElementById('tax_rate').value),
@@ -319,7 +312,6 @@
     function applyFormData(data) {
         if (data.system) document.getElementById('system').value = data.system;
         if (data.cycle_days) document.getElementById('cycle_days').value = data.cycle_days;
-        if (data.restock_days) document.getElementById('restock_days').value = data.restock_days;
         if (data.trips_per_week) document.getElementById('trips_per_week').value = data.trips_per_week;
         if (data.cargo_m3) document.getElementById('cargo_m3').value = data.cargo_m3;
         if (data.tax_rate) document.getElementById('tax_rate').value = data.tax_rate;
@@ -404,7 +396,6 @@
     function clearForm() {
         document.getElementById('system').value = '';
         document.getElementById('cycle_days').value = '4';
-        document.getElementById('restock_days').value = '4';
         document.getElementById('trips_per_week').value = '2';
         document.getElementById('cargo_m3').value = '60000';
         document.getElementById('tax_rate').value = '0.05';
