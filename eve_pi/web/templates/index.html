@@ -158,35 +158,40 @@
         <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span>Manufacturing Needs (Optional)</span>
             <button type="button" class="btn btn-sm" onclick="populateSystemProducts()"
-                    title="Filter product list to items this system can produce">
+                    title="Load producible items based on the system's planets">
                 Load System Products
             </button>
         </div>
-        <div class="dynamic-item" style="border:none; padding:0; margin:0 0 4px 0;">
-            <div><label>Product</label></div>
-            <div class="narrow"><label>Qty/Week</label></div>
-            <div class="action"></div>
+        <div id="mfgPlaceholder" style="color:#666; padding:10px 0; font-size:12px;">
+            Enter a system name above and click "Load System Products" to see what can be manufactured.
         </div>
-        <div id="manufacturing" class="dynamic-section">
-            {% if form_values and form_values.manufacturing_needs %}
-                {% for need in form_values.manufacturing_needs %}
-                <div class="dynamic-item" data-type="manufacturing">
-                    <div>
-                        <select name="mfg_product" disabled>
-                            <option value="{{ need.product }}" selected>{{ need.product }}</option>
-                        </select>
+        <div id="mfgContent" style="display:none;">
+            <div class="dynamic-item" style="border:none; padding:0; margin:0 0 4px 0;">
+                <div><label>Product</label></div>
+                <div class="narrow"><label>Qty/Week</label></div>
+                <div class="action"></div>
+            </div>
+            <div id="manufacturing" class="dynamic-section">
+                {% if form_values and form_values.manufacturing_needs %}
+                    {% for need in form_values.manufacturing_needs %}
+                    <div class="dynamic-item" data-type="manufacturing">
+                        <div>
+                            <select name="mfg_product">
+                                <option value="{{ need.product }}" selected>{{ need.product }}</option>
+                            </select>
+                        </div>
+                        <div class="narrow">
+                            <input type="number" name="mfg_quantity" min="1" value="{{ need.quantity_per_week }}">
+                        </div>
+                        <div class="action">
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
+                        </div>
                     </div>
-                    <div class="narrow">
-                        <input type="number" name="mfg_quantity" min="1" value="{{ need.quantity_per_week }}">
-                    </div>
-                    <div class="action">
-                        <button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button>
-                    </div>
-                </div>
-                {% endfor %}
-            {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </div>
+            <button type="button" class="btn btn-sm" onclick="addManufacturing()">+ Add Requirement</button>
         </div>
-        <button type="button" class="btn btn-sm" onclick="addManufacturing()">+ Add Requirement</button>
     </div>
 
     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -472,11 +477,13 @@
                     }
                 }
                 productOptionsHTML = html;
-                // Update and enable existing dropdowns
+                // Show the manufacturing content area
+                document.getElementById('mfgPlaceholder').style.display = 'none';
+                document.getElementById('mfgContent').style.display = 'block';
+                // Update existing dropdowns
                 document.querySelectorAll('#manufacturing select[name="mfg_product"]').forEach(sel => {
                     const current = sel.value;
                     sel.innerHTML = html;
-                    sel.disabled = false;
                     if (current) sel.value = current;
                 });
                 const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
@@ -488,9 +495,8 @@
     // Reset system products when system name changes
     document.getElementById('system').addEventListener('change', function() {
         systemProducts = null;
-        document.querySelectorAll('#manufacturing select[name="mfg_product"]').forEach(sel => {
-            sel.disabled = true;
-        });
+        document.getElementById('mfgPlaceholder').style.display = 'block';
+        document.getElementById('mfgContent').style.display = 'none';
     });
 
     // Hide processing overlay on page show (handles browser back button)
@@ -507,8 +513,23 @@
         const last = sessionStorage.getItem('eve_pi_last_form');
         if (last) {
             try {
-                applyFormData(JSON.parse(last));
+                const data = JSON.parse(last);
+                applyFormData(data);
+                // Auto-load system products if there's a system and manufacturing needs
+                if (data.system && data.manufacturing_needs && data.manufacturing_needs.length > 0) {
+                    populateSystemProducts();
+                }
             } catch {}
+        }
+    })();
+    {% endif %}
+
+    // If form_values has manufacturing needs (server-side re-render), auto-load products
+    {% if form_values and form_values.manufacturing_needs %}
+    (function() {
+        const system = document.getElementById('system').value.trim();
+        if (system) {
+            populateSystemProducts();
         }
     })();
     {% endif %}
