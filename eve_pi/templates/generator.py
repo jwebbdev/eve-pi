@@ -75,10 +75,11 @@ def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
     """Generate a hex grid of cell positions centered on (cx, cy).
 
     Returns list of (la, lo, row, col) sorted by distance from center.
-    Rows alternate offset by half a step (hex pattern).
+    Uses true hex geometry: row_height = step * sqrt(3)/2, odd rows offset by step/2.
     """
     import math
     half_grid = grid_size // 2
+    row_height = step * 0.866025  # sqrt(3)/2
     cells = []
 
     for row in range(-half_grid, half_grid + 1):
@@ -86,7 +87,7 @@ def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
             la = cx + col * step
             if row % 2 != 0:
                 la += step * 0.5  # offset odd rows
-            lo = cy + row * step
+            lo = cy + row * row_height
             dist = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
             cells.append((round(float(la), 5), round(float(lo), 5), row, col, dist))
 
