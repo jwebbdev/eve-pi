@@ -717,6 +717,20 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         if not feasible:
             continue
 
+        # Subtract opportunity cost: what each colony could earn independently
+        opportunity_cost = 0.0
+        # Factory planet (P3->P4)
+        factory_pt = p4_opt.planet.planet_type.name
+        opportunity_cost += opp_cost_lookup.get(factory_pt, 0.0)
+        # All feeder colonies
+        for _, colonies_needed, feeder_scored, _ in feeder_details:
+            feeder_pt = feeder_scored.option.planet.planet_type.name
+            opportunity_cost += opp_cost_lookup.get(feeder_pt, 0.0) * colonies_needed
+        chain_isk -= opportunity_cost
+
+        if chain_isk <= 0:
+            continue
+
         total_colonies = 1 + total_feeder_colonies
         isk_per_m3 = chain_isk / chain_volume if chain_volume > 0 else 0.0
 

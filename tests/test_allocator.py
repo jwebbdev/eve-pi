@@ -381,3 +381,37 @@ def test_opportunity_cost_lookup_populated():
     system_types = {p.planet_type.name for p in system.planets}
     for pt in system_types:
         assert pt in lookup, f"Missing planet type {pt} in opportunity cost lookup"
+
+
+def test_p3_to_p4_chain_opportunity_cost():
+    """P3->P4 chains with low P4 prices should be eliminated by opportunity cost."""
+    gd = GameData.load()
+    # Need Barren or Temperate for P4 factory, plus enough diversity for full chain
+    system = SolarSystem(name="TestP4Opp", system_id=99960, planets=[
+        Planet(planet_id=i, planet_type=gd.planet_types[pt], radius_km=5000.0)
+        for i, pt in enumerate([
+            "Gas", "Gas", "Gas", "Gas",
+            "Lava", "Lava", "Lava",
+            "Barren", "Barren", "Barren",
+            "Temperate", "Temperate",
+            "Plasma", "Plasma",
+            "Ice",
+        ], start=1)
+    ])
+    market = _make_fake_market()
+    # Set P4 price low — should not be worth building after opportunity cost
+    market["Broadcast Node"] = MarketData(
+        type_id=0, name="Broadcast Node", buy_price=50000,
+        sell_orders=[{"price": 47500, "volume_remain": 100000}],
+    )
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(10)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=0, cargo_capacity_m3=0, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    p4_assignments = [a for a in result.assignments if a.setup == SetupType.P3_TO_P4]
+    assert len(p4_assignments) == 0, (
+        f"Low-price P4 chains should be eliminated by opportunity cost but got: "
+        f"{[(a.product, a.isk_per_day) for a in p4_assignments]}"
+    )
