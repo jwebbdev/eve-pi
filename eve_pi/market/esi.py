@@ -22,6 +22,22 @@ class MarketData:
     buy_price: float = 0.0
     sell_orders: List[Dict] = field(default_factory=list)
 
+    @property
+    def sell_price(self) -> float:
+        """Lowest sell order price (what you'd match when creating a sell order)."""
+        if self.sell_orders:
+            return self.sell_orders[0]["price"]
+        return self.buy_price  # fallback
+
+    def get_sell_price(self, use_sell_orders: bool = False) -> float:
+        """Get the price we'd receive when selling.
+        use_sell_orders=False: sell to buy orders (instant, lower price)
+        use_sell_orders=True: create sell order (wait, higher price)
+        """
+        if use_sell_orders:
+            return self.sell_price
+        return self.buy_price
+
     def get_purchase_cost(self, quantity_needed: int) -> Tuple[float, float, bool]:
         """
         Calculate cost to purchase a given quantity from sell orders.

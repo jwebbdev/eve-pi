@@ -86,6 +86,8 @@ async def run_optimization(request: Request):
     # Parse form data
     system_name = form.get("system", "").strip()
     mode = form.get("mode", "self_sufficient")
+    pricing = form.get("pricing", "buy_orders")
+    use_sell_orders = pricing == "sell_orders"
     cycle_days = float(form.get("cycle_days") or 4)
     trips_raw = form.get("trips_per_week", "").strip()
     cargo_raw = form.get("cargo_m3", "").strip()
@@ -123,6 +125,7 @@ async def run_optimization(request: Request):
     form_values = {
         "system": system_name,
         "mode": mode,
+        "pricing": pricing,
         "cycle_days": cycle_days,
         "trips_per_week": trips_per_week,
         "cargo_m3": cargo_m3,
@@ -188,6 +191,7 @@ async def run_optimization(request: Request):
             cargo_capacity_m3=cargo_m3,
             tax_rate=tax_rate,
             manufacturing_needs=manufacturing_needs,
+            use_sell_orders=use_sell_orders,
         )
         result = optimize(constraints, market, game_data)
 

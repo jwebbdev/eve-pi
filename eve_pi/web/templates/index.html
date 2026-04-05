@@ -59,23 +59,42 @@
             </div>
         </div>
 
-        <label>Mode</label>
-        <div class="radio-group">
-            <label>
-                <input type="radio" name="mode" value="self_sufficient"
-                       {{ 'checked' if not form_values or form_values.mode == 'self_sufficient' }}>
-                Self-Sufficient
-            </label>
-            <label>
-                <input type="radio" name="mode" value="import"
-                       {{ 'checked' if form_values and form_values.mode == 'import' }}>
-                Import
-            </label>
-            <label>
-                <input type="radio" name="mode" value="hybrid"
-                       {{ 'checked' if form_values and form_values.mode == 'hybrid' }}>
-                Hybrid
-            </label>
+        <div class="form-row">
+            <div>
+                <label>Mode</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="mode" value="self_sufficient"
+                               {{ 'checked' if not form_values or form_values.mode == 'self_sufficient' }}>
+                        Self-Sufficient
+                    </label>
+                    <label>
+                        <input type="radio" name="mode" value="import"
+                               {{ 'checked' if form_values and form_values.mode == 'import' }}>
+                        Import
+                    </label>
+                    <label>
+                        <input type="radio" name="mode" value="hybrid"
+                               {{ 'checked' if form_values and form_values.mode == 'hybrid' }}>
+                        Hybrid
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label>Pricing</label>
+                <div class="radio-group">
+                    <label title="Sell instantly to existing buy orders (lower price)">
+                        <input type="radio" name="pricing" value="buy_orders"
+                               {{ 'checked' if not form_values or form_values.get('pricing', 'buy_orders') == 'buy_orders' }}>
+                        Sell to Buy Orders
+                    </label>
+                    <label title="Create sell orders and wait for buyers (higher price)">
+                        <input type="radio" name="pricing" value="sell_orders"
+                               {{ 'checked' if form_values and form_values.get('pricing') == 'sell_orders' }}>
+                        Create Sell Orders
+                    </label>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -300,6 +319,7 @@
         return {
             system: document.getElementById('system').value,
             mode: document.querySelector('input[name="mode"]:checked')?.value || 'self_sufficient',
+            pricing: document.querySelector('input[name="pricing"]:checked')?.value || 'buy_orders',
             cycle_days: parseFloat(document.getElementById('cycle_days').value),
             trips_per_week: parseInt(document.getElementById('trips_per_week').value),
             cargo_m3: parseFloat(document.getElementById('cargo_m3').value),
@@ -317,6 +337,10 @@
         if (data.tax_rate) document.getElementById('tax_rate').value = data.tax_rate;
         if (data.mode) {
             const radio = document.querySelector(`input[name="mode"][value="${data.mode}"]`);
+            if (radio) radio.checked = true;
+        }
+        if (data.pricing) {
+            const radio = document.querySelector(`input[name="pricing"][value="${data.pricing}"]`);
             if (radio) radio.checked = true;
         }
         // Rebuild characters

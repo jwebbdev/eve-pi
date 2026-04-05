@@ -31,6 +31,7 @@ class OptimizationConstraints:
     cargo_capacity_m3: float = 60000.0
     tax_rate: float = 0.05
     manufacturing_needs: List[ManufacturingNeed] = field(default_factory=list)
+    use_sell_orders: bool = False  # True = create sell orders (higher price), False = sell to buy orders (instant)
 
     @property
     def total_colonies(self) -> int:
@@ -156,6 +157,7 @@ def _score_options(matrix, constraints, market_data, game_data):
                 p1_name=opt.product, market_data=market_data,
                 extraction_rate_r0_per_hour=rate, cycle_days=constraints.cycle_days,
                 num_factories=opt.max_factories, tax_rate=constraints.tax_rate, game_data=game_data,
+                use_sell_orders=constraints.use_sell_orders,
             )
             scored.append(ScoredOption(option=opt, isk_per_day=profit, isk_per_colony=profit,
                                        volume_per_day=opt.output_volume_per_day))
@@ -164,6 +166,7 @@ def _score_options(matrix, constraints, market_data, game_data):
                 p2_name=opt.product, market_data=market_data,
                 extraction_rate_r0_per_hour=12000, cycle_days=constraints.cycle_days,
                 tax_rate=constraints.tax_rate, game_data=game_data,
+                use_sell_orders=constraints.use_sell_orders,
             )
             scored.append(ScoredOption(option=opt, isk_per_day=profit, isk_per_colony=profit,
                                        volume_per_day=opt.output_volume_per_day))
@@ -171,6 +174,7 @@ def _score_options(matrix, constraints, market_data, game_data):
             profit = calculate_factory_profit(
                 product_name=opt.product, setup=opt.setup, num_factories=opt.max_factories,
                 market_data=market_data, tax_rate=constraints.tax_rate, game_data=game_data,
+                use_sell_orders=constraints.use_sell_orders,
             )
             scored.append(ScoredOption(option=opt, isk_per_day=profit, isk_per_colony=profit,
                                        volume_per_day=opt.output_volume_per_day))
@@ -301,7 +305,7 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         if not recipe:
             continue
         output_mkt = market_data.get(s.option.product)
-        if not output_mkt or output_mkt.buy_price <= 0:
+        if not output_mkt or output_mkt.get_sell_price(constraints.use_sell_orders) <= 0:
             continue
         num_factories = s.option.max_factories
 
@@ -357,7 +361,7 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         bottleneck_ratio = min(supply_ratios) if supply_ratios else 1.0
         output_per_hour = recipe.output_per_hour * num_factories * min(bottleneck_ratio, 1.0)
         daily_output = output_per_hour * 24
-        revenue = daily_output * output_mkt.buy_price
+        revenue = daily_output * output_mkt.get_sell_price(constraints.use_sell_orders)
         export_tax = revenue * constraints.tax_rate
         chain_isk = revenue - export_tax
 
@@ -369,7 +373,7 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
             if p1_mkt:
                 p1_per_hr = _calc_extraction_p1_per_hour(ext_opt, game_data, constraints.cycle_days)
                 p1_daily = p1_per_hr * 24
-                p1_revenue = p1_daily * p1_mkt.buy_price * (1 - constraints.tax_rate)
+                p1_revenue = p1_daily * p1_mkt.get_sell_price(constraints.use_sell_orders) * (1 - constraints.tax_rate)
                 opportunity_cost += p1_revenue * colonies_needed
         chain_isk -= opportunity_cost
 
@@ -421,13 +425,13 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         if not p3_recipe:
             continue
         output_mkt = market_data.get(p3_product)
-        if not output_mkt or output_mkt.buy_price <= 0:
+        if not output_mkt or output_mkt.get_sell_price(constraints.use_sell_orders) <= 0:
             continue
 
         num_p3_factories = p3_opt.max_factories
         p3_output_per_hour = p3_recipe.output_per_hour * num_p3_factories
         daily_output = p3_output_per_hour * 24
-        revenue = daily_output * output_mkt.buy_price
+        revenue = daily_output * output_mkt.get_sell_price(constraints.use_sell_orders)
         export_tax = revenue * constraints.tax_rate
         chain_isk = revenue - export_tax
         if chain_isk <= 0:
@@ -549,13 +553,13 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         if not p4_recipe:
             continue
         output_mkt = market_data.get(p4_product)
-        if not output_mkt or output_mkt.buy_price <= 0:
+        if not output_mkt or output_mkt.get_sell_price(constraints.use_sell_orders) <= 0:
             continue
 
         num_p4_factories = p4_opt.max_factories
         p4_output_per_hour = p4_recipe.output_per_hour * num_p4_factories
         daily_output = p4_output_per_hour * 24
-        revenue = daily_output * output_mkt.buy_price
+        revenue = daily_output * output_mkt.get_sell_price(constraints.use_sell_orders)
         export_tax = revenue * constraints.tax_rate
         chain_isk = revenue - export_tax
         if chain_isk <= 0:

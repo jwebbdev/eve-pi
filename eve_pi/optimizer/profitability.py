@@ -14,6 +14,7 @@ def calculate_extraction_profit(
     num_factories: int,
     tax_rate: float,
     game_data: GameData,
+    use_sell_orders: bool = False,
 ) -> float:
     """
     Calculate daily ISK profit for an R0->P1 extraction colony.
@@ -30,7 +31,8 @@ def calculate_extraction_profit(
     )
     effective_p1_per_hour = p1_per_hour * ratio
     daily_output = effective_p1_per_hour * 24
-    revenue = daily_output * mkt.buy_price
+    sell_price = mkt.get_sell_price(use_sell_orders)
+    revenue = daily_output * sell_price
     export_tax = revenue * tax_rate
     return revenue - export_tax
 
@@ -42,6 +44,7 @@ def calculate_factory_profit(
     market_data: Dict[str, MarketData],
     tax_rate: float,
     game_data: GameData,
+    use_sell_orders: bool = False,
 ) -> float:
     """Calculate daily ISK profit for a factory colony (buy inputs, sell output)."""
     tier_key = {
@@ -59,7 +62,8 @@ def calculate_factory_profit(
         return 0.0
     output_per_hour = recipe.output_per_hour * num_factories
     daily_output = output_per_hour * 24
-    revenue = daily_output * output_mkt.buy_price
+    sell_price = output_mkt.get_sell_price(use_sell_orders)
+    revenue = daily_output * sell_price
     export_tax = revenue * tax_rate
     input_cost = 0.0
     import_tax = 0.0
@@ -82,6 +86,7 @@ def calculate_r0_p2_profit(
     cycle_days: float,
     tax_rate: float,
     game_data: GameData,
+    use_sell_orders: bool = False,
 ) -> float:
     """Calculate daily ISK profit for an R0->P2 single-planet extraction colony."""
     output_mkt = market_data.get(p2_name)
@@ -93,6 +98,7 @@ def calculate_r0_p2_profit(
     )
     effective_p2_per_hour = p2_per_hour * ratio
     daily_output = effective_p2_per_hour * 24
-    revenue = daily_output * output_mkt.buy_price
+    sell_price = output_mkt.get_sell_price(use_sell_orders)
+    revenue = daily_output * sell_price
     export_tax = revenue * tax_rate
     return revenue - export_tax
