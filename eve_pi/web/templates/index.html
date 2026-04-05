@@ -386,7 +386,7 @@
                     `value="${need.product}" selected`
                 );
                 div.innerHTML = `
-                    <div><select name="mfg_product" ${systemProducts ? '' : 'disabled'}>${selectHtml}</select></div>
+                    <div><select name="mfg_product">${selectHtml}</select></div>
                     <div class="narrow"><input type="number" name="mfg_quantity" min="1" value="${need.quantity_per_week}"></div>
                     <div class="action"><button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button></div>
                 `;
@@ -450,10 +450,10 @@
     // System products filtering for manufacturing needs
     let systemProducts = null;  // cached after first load
 
-    function populateSystemProducts() {
+    function populateSystemProducts(silent) {
         const system = document.getElementById('system').value.trim();
         if (!system) {
-            alert('Enter a system name first');
+            if (!silent) alert('Enter a system name first');
             return;
         }
         fetch(`/api/system-products/${encodeURIComponent(system)}`)
@@ -486,8 +486,10 @@
                     sel.innerHTML = html;
                     if (current) sel.value = current;
                 });
-                const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
-                alert(`Loaded ${total} producible items for ${system}`);
+                if (!silent) {
+                    const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
+                    alert(`Loaded ${total} producible items for ${system}`);
+                }
             })
             .catch(err => alert('Failed to load system products: ' + err));
     }
@@ -517,7 +519,7 @@
                 applyFormData(data);
                 // Auto-load system products if there's a system and manufacturing needs
                 if (data.system && data.manufacturing_needs && data.manufacturing_needs.length > 0) {
-                    populateSystemProducts();
+                    populateSystemProducts(true);
                 }
             } catch {}
         }
