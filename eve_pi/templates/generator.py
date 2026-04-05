@@ -86,11 +86,9 @@ def _hex_grid_positions(cx: float, cy: float, step: float,
     """
     import math
 
-    # Hex grid: offset coordinates converted to axial
-    # step_la = step (vertical), step_lo = step (horizontal)
-    # In a hex grid, alternating rows are offset by half a step
+    # Grid with offset rows — uses full step for both axes to avoid visual overlap
     half = step * 0.5
-    row_height = step * 0.866  # sqrt(3)/2
+    row_height = step  # full step vertically (not 0.866) to prevent structure overlap
 
     # Generate positions in concentric hex rings around center
     # Ring N has 6*N positions
