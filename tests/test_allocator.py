@@ -521,3 +521,53 @@ def test_swap_pass_noop_unlimited_hauling():
         f"Unlimited hauling should have no stockpiled colonies but got: "
         f"{[(a.product, a.setup.value) for a in stockpiled]}"
     )
+
+
+def test_ccu_correction_adjusts_profit():
+    """Characters with lower CCU should show lower ISK/day than max CCU characters."""
+    gd = GameData.load()
+    system = _make_test_system(gd)
+    market = _make_fake_market()
+    # Mix of CCU levels: one CCU4, one CCU5
+    characters = [
+        Character(name="LowCCU", ccu_level=4, max_planets=5),
+        Character(name="HighCCU", ccu_level=5, max_planets=5),
+    ]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=0, cargo_capacity_m3=0, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+
+    # Find assignments on the same planet with different characters
+    low_assignments = [a for a in result.assignments if a.character == "LowCCU" and a.isk_per_day > 0]
+    high_assignments = [a for a in result.assignments if a.character == "HighCCU" and a.isk_per_day > 0]
+    assert len(low_assignments) > 0
+    assert len(high_assignments) > 0
+
+    # Find a planet that has both a CCU4 and CCU5 assignment with the same setup
+    for low in low_assignments:
+        for high in high_assignments:
+            if low.planet_id == high.planet_id and low.setup == high.setup and low.product == high.product:
+                # CCU4 should have fewer factories and lower ISK
+                assert low.num_factories <= high.num_factories, (
+                    f"CCU4 should have <= factories than CCU5 on same planet: "
+                    f"{low.num_factories} vs {high.num_factories}"
+                )
+                if low.num_factories < high.num_factories:
+                    assert low.isk_per_day < high.isk_per_day, (
+                        f"CCU4 with fewer factories should have lower ISK: "
+                        f"{low.isk_per_day} vs {high.isk_per_day}"
+                    )
+                return  # found a matching pair, test passes
+
+    # If no same-planet pair found, just verify CCU4 assignments have reasonable factory counts
+    from eve_pi.capacity.planet_capacity import can_fit
+    planet_radii = {p.planet_id: p.radius_km for p in system.planets}
+    for a in low_assignments:
+        radius = planet_radii.get(a.planet_id)
+        if radius:
+            _, expected_factories, _ = can_fit(radius, 4, a.setup, gd, a.product, 4.0)
+            assert a.num_factories == expected_factories, (
+                f"CCU4 assignment should have {expected_factories} factories but has {a.num_factories}"
+            )

@@ -2,7 +2,7 @@
 import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from eve_pi.capacity.planet_capacity import SetupType
+from eve_pi.capacity.planet_capacity import SetupType, can_fit
 from eve_pi.data.loader import GameData
 from eve_pi.extraction.yield_calc import yield_ratio_vs_baseline
 from eve_pi.market.esi import MarketData
@@ -1341,6 +1341,26 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
                 )
                 if used <= 0:
                     break
+
+    # 7. CCU correction pass: adjust ISK/day and volume for actual character CCU levels
+    char_ccu = {c.name: c.ccu_level for c in constraints.characters}
+    planet_radii = {p.planet_id: p.radius_km for p in constraints.system.planets}
+    for a in result.assignments:
+        if not a.character or a.num_factories <= 0:
+            continue
+        ccu = char_ccu.get(a.character)
+        if ccu is None:
+            continue
+        radius = planet_radii.get(a.planet_id)
+        if radius is None:
+            continue
+        _, actual_factories, _ = can_fit(radius, ccu, a.setup, game_data, a.product,
+                                         constraints.cycle_days)
+        if actual_factories > 0 and actual_factories != a.num_factories:
+            ratio = actual_factories / a.num_factories
+            a.isk_per_day *= ratio
+            a.volume_per_day *= ratio
+            a.num_factories = actual_factories
 
     # Build totals: total_volume_per_day counts only shipped volume
     result.total_isk_per_day = sum(a.isk_per_day for a in result.assignments)
