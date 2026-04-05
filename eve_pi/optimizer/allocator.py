@@ -300,33 +300,23 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         recipe = game_data.get_recipe("p1_to_p2", s.option.product)
         if not recipe:
             continue
-        # Calculate factory output revenue (no input cost since inputs are self-extracted)
         output_mkt = market_data.get(s.option.product)
         if not output_mkt or output_mkt.buy_price <= 0:
             continue
         num_factories = s.option.max_factories
-        output_per_hour = recipe.output_per_hour * num_factories
-        daily_output = output_per_hour * 24
-        revenue = daily_output * output_mkt.buy_price
-        export_tax = revenue * constraints.tax_rate
-        chain_isk = revenue - export_tax
-        if chain_isk <= 0:
-            continue
-
-        # Calculate volume/day of the P2 output
-        p2_mat = game_data.materials.get(s.option.product)
-        vol_per_unit = p2_mat.volume_m3 if p2_mat else 0.75
-        chain_volume = daily_output * vol_per_unit
 
         # Figure out feeder extraction colonies needed for each P1 input
+        # Also calculate the actual P1 supply rate (bottleneck)
         feeder_details = []
         total_feeder_colonies = 0
         feasible = True
         feeder_options_list = []
+        # Track the bottleneck: how much of the factory demand can feeders actually supply?
+        supply_ratios = []  # ratio of supply/demand for each input
 
         for input_name, qty_per_cycle in recipe.inputs:
             # P1 demand: qty_per_cycle per cycle_seconds, times num_factories
-            p1_per_hour = qty_per_cycle * (3600 / recipe.cycle_seconds) * num_factories
+            p1_demand_per_hour = qty_per_cycle * (3600 / recipe.cycle_seconds) * num_factories
 
             # Check if we can extract this P1 in this system
             r0_name = game_data.r0_for_p1(input_name)
@@ -349,8 +339,12 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
             if p1_per_hour_per_colony <= 0:
                 feasible = False
                 break
-            colonies_needed = math.ceil(p1_per_hour / p1_per_hour_per_colony)
+            colonies_needed = math.ceil(p1_demand_per_hour / p1_per_hour_per_colony)
             colonies_needed = max(1, colonies_needed)
+
+            # Actual supply from these colonies
+            actual_supply = p1_per_hour_per_colony * colonies_needed
+            supply_ratios.append(actual_supply / p1_demand_per_hour if p1_demand_per_hour > 0 else 1.0)
 
             total_feeder_colonies += colonies_needed
             feeder_details.append((input_name, colonies_needed, ext_opt, SetupType.R0_TO_P1))
@@ -358,6 +352,34 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
 
         if not feasible:
             continue
+
+        # Factory output is bottlenecked by the least-supplied input
+        bottleneck_ratio = min(supply_ratios) if supply_ratios else 1.0
+        output_per_hour = recipe.output_per_hour * num_factories * min(bottleneck_ratio, 1.0)
+        daily_output = output_per_hour * 24
+        revenue = daily_output * output_mkt.buy_price
+        export_tax = revenue * constraints.tax_rate
+        chain_isk = revenue - export_tax
+
+        # Subtract opportunity cost: what the feeder colonies could earn selling P1 directly
+        opportunity_cost = 0.0
+        for input_name, colonies_needed, ext_opt, _ in feeder_details:
+            # Each feeder colony could sell this P1 instead
+            p1_mkt = market_data.get(input_name)
+            if p1_mkt:
+                p1_per_hr = _calc_extraction_p1_per_hour(ext_opt, game_data, constraints.cycle_days)
+                p1_daily = p1_per_hr * 24
+                p1_revenue = p1_daily * p1_mkt.buy_price * (1 - constraints.tax_rate)
+                opportunity_cost += p1_revenue * colonies_needed
+        chain_isk -= opportunity_cost
+
+        if chain_isk <= 0:
+            continue
+
+        # Calculate volume/day of the actual output
+        p2_mat = game_data.materials.get(s.option.product)
+        vol_per_unit = p2_mat.volume_m3 if p2_mat else 0.75
+        chain_volume = daily_output * vol_per_unit
 
         total_colonies = 1 + total_feeder_colonies  # 1 factory + N feeders
         isk_per_m3 = chain_isk / chain_volume if chain_volume > 0 else 0.0

@@ -121,14 +121,22 @@ def test_self_sufficient_factory_chains():
         Planet(planet_id=9, planet_type=gd.planet_types["Ice"], radius_km=10000.0),
         Planet(planet_id=10, planet_type=gd.planet_types["Storm"], radius_km=10000.0),
     ])
-    # Set P2 prices high to make factory chains attractive
+    # Set P2 prices very high relative to P1 to make chains profitable after opportunity cost
     market = _make_fake_market()
+    # Lower P1 prices
+    for p1_name in market:
+        if market[p1_name].buy_price < 1000:
+            market[p1_name] = MarketData(
+                type_id=0, name=p1_name, buy_price=100,
+                sell_orders=[{"price": 95, "volume_remain": 100000}],
+            )
+    # Raise P2 prices very high
     for p2_name in ["Coolant", "Construction Blocks", "Enriched Uranium",
                      "Mechanical Parts", "Rocket Fuel", "Superconductors"]:
         if p2_name in market:
             market[p2_name] = MarketData(
-                type_id=0, name=p2_name, buy_price=25000,
-                sell_orders=[{"price": 23750, "volume_remain": 100000}],
+                type_id=0, name=p2_name, buy_price=100000,
+                sell_orders=[{"price": 95000, "volume_remain": 100000}],
             )
     characters = [
         Character(name="Char1", ccu_level=4, max_planets=6),
