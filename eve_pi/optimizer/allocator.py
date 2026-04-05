@@ -838,11 +838,6 @@ def _swap_optimize_shipping(result, units, scored, matrix, game_data,
                                                   character_colony_counts, feeder_p1_colonies)
             old_shipped_isk = sum(a.isk_per_day for a in result.assignments if a.category == "ship")
 
-            # Remove candidate and all its feeders from allocations
-            candidate_planet_id = candidate.planet_id
-            candidate_character = candidate.character
-            candidate_volume = candidate.volume_per_day
-
             # Find all assignments related to this shipped colony
             # (the colony itself + any feed colonies that reference its product)
             to_remove = [candidate]
@@ -862,7 +857,8 @@ def _swap_optimize_shipping(result, units, scored, matrix, game_data,
                         planet_character_map[a.planet_id].discard(a.character)
                         if not planet_character_map[a.planet_id]:
                             del planet_character_map[a.planet_id]
-                    character_colony_counts[a.character] -= 1
+                    if a.character:
+                        character_colony_counts[a.character] -= 1
                     # Update feeder tracking
                     if a.category == "feed":
                         key = (a.product, a.setup)
