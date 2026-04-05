@@ -721,13 +721,11 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
     return units
 
 
-def _build_opportunity_cost_lookup(units: list) -> Dict[str, float]:
+def _build_opportunity_cost_lookup(units: List[_ProductionUnit]) -> Dict[str, float]:
     """Build a lookup of best ISK/colony/day by planet type from standalone and chain units.
 
     For standalone units, the planet type comes from the unit's factory_option.
-    For chain units (P1->P2), the ISK/colony is spread across all colonies, so
-    the factory planet gets that ISK/colony, and each feeder's planet type also
-    gets its standalone ISK/colony if it's higher.
+    For P1->P2 chain units, the chain's ISK/colony is recorded for the factory planet type.
     """
     best: Dict[str, float] = {}
 

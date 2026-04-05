@@ -5,7 +5,7 @@ from eve_pi.models.characters import Character
 from eve_pi.market.esi import MarketData
 from eve_pi.optimizer.allocator import (
     optimize, OptimizationConstraints, OptimizationResult,
-    _build_production_units, _build_opportunity_cost_lookup, _score_options, ScoredOption,
+    _build_production_units, _build_opportunity_cost_lookup, _score_options,
 )
 from eve_pi.optimizer.feasibility import build_feasibility_matrix
 
