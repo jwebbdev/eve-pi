@@ -493,6 +493,11 @@
         });
     });
 
+    // Hide processing overlay on page show (handles browser back button)
+    window.addEventListener('pageshow', function() {
+        document.getElementById('processingOverlay').classList.remove('active');
+    });
+
     // Initialize dropdown on page load
     refreshConfigDropdown();
 
