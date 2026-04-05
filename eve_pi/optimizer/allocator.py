@@ -266,16 +266,12 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
                 extraction_by_p1[s.option.product] = s
 
     # Step 1: Standalone extraction units (R0->P1 and R0->P2)
-    seen_standalone = set()
+    # No deduplication: each planet×product combo is a separate unit
     for s in scored:
         if s.option.setup not in (SetupType.R0_TO_P1, SetupType.R0_TO_P2):
             continue
         if s.isk_per_day <= 0:
             continue
-        key = (s.option.product, s.option.setup)
-        if key in seen_standalone:
-            continue
-        seen_standalone.add(key)
         isk_per_m3 = s.isk_per_day / s.volume_per_day if s.volume_per_day > 0 else 0.0
         unit = _ProductionUnit(
             kind="standalone",
@@ -699,6 +695,154 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
     return units
 
 
+def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
+                       planet_character_map, character_colony_counts,
+                       constraints, feeder_p1_colonies) -> int:
+    """Try to allocate a production unit. Returns number of colonies used (0 if failed)."""
+    num_characters = len(constraints.characters)
+
+    def _planet_has_slot(planet_id: int) -> bool:
+        used = planet_character_map.get(planet_id, set())
+        return len(used) < num_characters
+
+    def _assign_character(planet_id: int) -> str:
+        used = planet_character_map.get(planet_id, set())
+        available = [
+            c for c in constraints.characters
+            if c.name not in used and character_colony_counts[c.name] < c.max_planets
+        ]
+        if not available:
+            return ""
+        best = max(available, key=lambda c: c.max_planets - character_colony_counts[c.name])
+        if planet_id not in planet_character_map:
+            planet_character_map[planet_id] = set()
+        planet_character_map[planet_id].add(best.name)
+        character_colony_counts[best.name] += 1
+        return best.name
+
+    factory_planet_id = unit.factory_option.option.planet.planet_id
+
+    if not _planet_has_slot(factory_planet_id):
+        return 0
+
+    if unit.kind == "standalone":
+        char_name = _assign_character(factory_planet_id)
+        result.assignments.append(ColonyAssignment(
+            planet_id=factory_planet_id,
+            planet_type=unit.factory_option.option.planet.planet_type.name,
+            setup=unit.factory_option.option.setup,
+            product=unit.product,
+            num_factories=unit.factory_option.option.max_factories,
+            isk_per_day=unit.isk_per_day,
+            volume_per_day=unit.volume_per_day,
+            details=f"{unit.factory_option.option.setup.value} on {unit.factory_option.option.planet.planet_type.name}",
+            category=category,
+            character=char_name,
+        ))
+        return 1
+
+    # Chain allocation: check feeder feasibility first
+    additional_feeders = 0
+    feeder_plan = []
+    for material_name, colonies_needed, feeder_opt, feeder_setup in unit.feeder_details:
+        already_allocated = feeder_p1_colonies.get((material_name, feeder_setup), 0)
+        new_needed = max(0, colonies_needed - already_allocated)
+        if feeder_setup == SetupType.R0_TO_P1:
+            total_available = sum(
+                num_characters - len(planet_character_map.get(s.option.planet.planet_id, set()))
+                for s in scored
+                if s.option.setup == SetupType.R0_TO_P1 and s.option.product == material_name
+            )
+        else:
+            total_available = sum(
+                num_characters - len(planet_character_map.get(opt.planet.planet_id, set()))
+                for opt in matrix
+                if opt.setup == feeder_setup and opt.product == material_name
+            )
+        if new_needed > total_available:
+            return 0
+        additional_feeders += new_needed
+        feeder_plan.append((material_name, colonies_needed, new_needed, feeder_opt, feeder_setup))
+
+    total_new_colonies = 1 + additional_feeders
+    max_colonies = constraints.total_colonies
+    current_used = sum(character_colony_counts.values())
+    if current_used + total_new_colonies > max_colonies:
+        return 0
+
+    # Allocate factory colony
+    char_name = _assign_character(factory_planet_id)
+    details_suffix = f" ({unit.factory_option.option.max_factories} factories)" if unit.kind == "chain" else ""
+    result.assignments.append(ColonyAssignment(
+        planet_id=factory_planet_id,
+        planet_type=unit.factory_option.option.planet.planet_type.name,
+        setup=unit.setup,
+        product=unit.product,
+        num_factories=unit.factory_option.option.max_factories,
+        isk_per_day=unit.isk_per_day,
+        volume_per_day=unit.volume_per_day,
+        details=f"{unit.setup.value} on {unit.factory_option.option.planet.planet_type.name}{details_suffix}",
+        category=category,
+        character=char_name,
+    ))
+    colonies_allocated = 1
+
+    # Allocate feeder colonies
+    for material_name, total_needed, new_needed, feeder_opt, feeder_setup in feeder_plan:
+        if feeder_setup == SetupType.R0_TO_P1:
+            candidates = [
+                s for s in scored
+                if s.option.setup == SetupType.R0_TO_P1
+                and s.option.product == material_name
+                and s.isk_per_day > 0
+            ]
+            placed = 0
+            for ext in candidates:
+                if placed >= new_needed:
+                    break
+                while placed < new_needed and _planet_has_slot(ext.option.planet.planet_id):
+                    fc_name = _assign_character(ext.option.planet.planet_id)
+                    result.assignments.append(ColonyAssignment(
+                        planet_id=ext.option.planet.planet_id,
+                        planet_type=ext.option.planet.planet_type.name,
+                        setup=SetupType.R0_TO_P1,
+                        product=material_name,
+                        num_factories=ext.option.max_factories,
+                        isk_per_day=0.0, volume_per_day=0.0,
+                        details=f"r0_to_p1 on {ext.option.planet.planet_type.name} (feeding {unit.product})",
+                        category="feed", feeds=f"-> {unit.product} factory",
+                        character=fc_name,
+                    ))
+                    colonies_allocated += 1
+                    placed += 1
+        else:
+            candidates_raw = [
+                opt for opt in matrix
+                if opt.setup == feeder_setup and opt.product == material_name
+            ]
+            placed = 0
+            for fopt in candidates_raw:
+                if placed >= new_needed:
+                    break
+                while placed < new_needed and _planet_has_slot(fopt.planet.planet_id):
+                    fc_name = _assign_character(fopt.planet.planet_id)
+                    result.assignments.append(ColonyAssignment(
+                        planet_id=fopt.planet.planet_id,
+                        planet_type=fopt.planet.planet_type.name,
+                        setup=feeder_setup, product=material_name,
+                        num_factories=fopt.max_factories,
+                        isk_per_day=0.0, volume_per_day=0.0,
+                        details=f"{feeder_setup.value} on {fopt.planet.planet_type.name} (feeding {unit.product})",
+                        category="feed", feeds=f"-> {unit.product} factory",
+                        character=fc_name,
+                    ))
+                    colonies_allocated += 1
+                    placed += 1
+        feeder_p1_colonies[(material_name, feeder_setup)] = feeder_p1_colonies.get((material_name, feeder_setup), 0) + placed
+
+    return colonies_allocated
+
+
 def _allocate_self_sufficient(scored, constraints, market_data, game_data, matrix=None):
     """Allocate for self-sufficient mode with factory chains and stockpile filling."""
     result = OptimizationResult()
@@ -708,376 +852,110 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
     if matrix is None:
         matrix = []
 
-    # Build all candidate production units
+    # 1. Build production units (one per planet x product, no dedup)
     units = _build_production_units(scored, constraints, market_data, game_data, matrix)
     if not units:
         return result
 
-    # Sort by ISK per m3 of output (best value density first)
-    units.sort(key=lambda u: u.isk_per_m3, reverse=True)
+    # 2. Sort by ISK/colony/day (true value metric)
+    units.sort(key=lambda u: u.isk_per_day / u.total_colonies if u.total_colonies > 0 else 0.0, reverse=True)
 
-    colonies_used = 0
-    volume_used = 0.0
-    allocated_products = set()
-    # Track feeder colonies already allocated to avoid double-counting
-    # Key: (material_name, setup_type) -> number of feeder colonies allocated
-    feeder_p1_colonies: Dict[tuple, int] = {}
-    # Track which extraction products have standalone colonies
-    standalone_extraction_products = set()
-    # Track which characters are assigned to which planets
-    # planet_character_map[planet_id] = set of character names on that planet
+    # Shared state for tracking allocations
     num_characters = len(constraints.characters)
     planet_character_map: Dict[int, set] = {}
-    # Track how many colonies each character has total
     character_colony_counts: Dict[str, int] = {}
     for c in constraints.characters:
         character_colony_counts[c.name] = 0
+    feeder_p1_colonies: Dict[tuple, int] = {}
 
-    def _planet_has_slot(planet_id: int) -> bool:
-        used = planet_character_map.get(planet_id, set())
-        return len(used) < num_characters
+    def _colonies_used():
+        return sum(character_colony_counts.values())
 
-    def _assign_character(planet_id: int) -> str:
-        """Assign the best available character to a planet. Returns character name."""
-        used = planet_character_map.get(planet_id, set())
-        # Pick a character not yet on this planet, preferring those with fewest colonies
-        available = [
-            c for c in constraints.characters
-            if c.name not in used and character_colony_counts[c.name] < c.max_planets
-        ]
-        if not available:
-            return ""
-        # Pick character with most remaining slots
-        best = max(available, key=lambda c: c.max_planets - character_colony_counts[c.name])
-        if planet_id not in planet_character_map:
-            planet_character_map[planet_id] = set()
-        planet_character_map[planet_id].add(best.name)
-        character_colony_counts[best.name] += 1
-        return best.name
-
-    # --- Step 1.5: Manufacturing needs (highest priority) ---
+    # 3. Manufacturing pass: allocate manufacturing needs first
     for need in constraints.manufacturing_needs:
-        if colonies_used >= max_colonies:
+        if _colonies_used() >= max_colonies:
             break
-        # Find the best production unit for this product
-        matching_units = [u for u in units if u.product == need.product]
-        if not matching_units:
-            continue
-        # Pick the one with highest ISK/day (best factory setup)
-        matching_units.sort(key=lambda u: u.isk_per_day, reverse=True)
-
-        for unit in matching_units:
-            if unit.product in allocated_products:
+        matching = sorted(
+            [u for u in units if u.product == need.product],
+            key=lambda u: u.isk_per_day, reverse=True,
+        )
+        for unit in matching:
+            used = _try_allocate_unit(
+                unit, result, "manufacturing", scored, matrix, game_data,
+                planet_character_map, character_colony_counts,
+                constraints, feeder_p1_colonies,
+            )
+            if used > 0:
+                # Update the details to include manufacturing need info
+                for a in result.assignments:
+                    if a.category == "manufacturing" and a.product == unit.product and "(mfg need:" not in a.details:
+                        a.details = a.details.rstrip(")") if a.details.endswith(")") else a.details
+                        a.details += f" (mfg need: {need.quantity_per_week}/wk)"
                 break
 
-            if unit.kind == "standalone":
-                if colonies_used + 1 > max_colonies:
-                    continue
-                if not _planet_has_slot(unit.factory_option.option.planet.planet_id):
-                    continue
-                char_name = _assign_character(unit.factory_option.option.planet.planet_id)
-                result.assignments.append(ColonyAssignment(
-                    planet_id=unit.factory_option.option.planet.planet_id,
-                    planet_type=unit.factory_option.option.planet.planet_type.name,
-                    setup=unit.factory_option.option.setup,
-                    product=unit.product,
-                    num_factories=unit.factory_option.option.max_factories,
-                    isk_per_day=unit.isk_per_day,
-                    volume_per_day=unit.volume_per_day,
-                    details=f"{unit.factory_option.option.setup.value} on {unit.factory_option.option.planet.planet_type.name} (mfg need: {need.quantity_per_week}/wk)",
-                    category="manufacturing",
-                    character=char_name,
-                ))
-                colonies_used += 1
-                allocated_products.add(unit.product)
-                break
-
-            elif unit.kind == "chain":
-                if not _planet_has_slot(unit.factory_option.option.planet.planet_id):
-                    continue
-
-                # Check feeder feasibility (same logic as shipping step)
-                additional_feeders = 0
-                feeder_plan = []
-                chain_feasible = True
-                for material_name, colonies_needed, feeder_opt, feeder_setup in unit.feeder_details:
-                    already_allocated = feeder_p1_colonies.get((material_name, feeder_setup), 0)
-                    new_needed = max(0, colonies_needed - already_allocated)
-                    if feeder_setup == SetupType.R0_TO_P1:
-                        total_available = 0
-                        for s in scored:
-                            if s.option.setup == SetupType.R0_TO_P1 and s.option.product == material_name:
-                                total_available += num_characters - len(planet_character_map.get(s.option.planet.planet_id, set()))
-                        if new_needed > total_available:
-                            chain_feasible = False
-                            break
-                    else:
-                        total_available = 0
-                        for opt in matrix:
-                            if opt.setup == feeder_setup and opt.product == material_name:
-                                total_available += num_characters - len(planet_character_map.get(opt.planet.planet_id, set()))
-                        if new_needed > total_available:
-                            chain_feasible = False
-                            break
-                    additional_feeders += new_needed
-                    feeder_plan.append((material_name, colonies_needed, new_needed, feeder_opt, feeder_setup))
-
-                if not chain_feasible:
-                    continue
-                total_new_colonies = 1 + additional_feeders
-                if colonies_used + total_new_colonies > max_colonies:
-                    continue
-
-                # Allocate factory
-                char_name = _assign_character(unit.factory_option.option.planet.planet_id)
-                result.assignments.append(ColonyAssignment(
-                    planet_id=unit.factory_option.option.planet.planet_id,
-                    planet_type=unit.factory_option.option.planet.planet_type.name,
-                    setup=unit.setup,
-                    product=unit.product,
-                    num_factories=unit.factory_option.option.max_factories,
-                    isk_per_day=unit.isk_per_day,
-                    volume_per_day=unit.volume_per_day,
-                    details=f"{unit.setup.value} on {unit.factory_option.option.planet.planet_type.name} (mfg need: {need.quantity_per_week}/wk)",
-                    category="manufacturing",
-                    character=char_name,
-                ))
-                colonies_used += 1
-
-                # Allocate feeders
-                for material_name, total_needed, new_needed, feeder_opt, feeder_setup in feeder_plan:
-                    if feeder_setup == SetupType.R0_TO_P1:
-                        candidate_options = [
-                            s for s in scored
-                            if s.option.setup == SetupType.R0_TO_P1
-                            and s.option.product == material_name
-                            and s.isk_per_day > 0
-                        ]
-                        placed = 0
-                        for ext in candidate_options:
-                            if placed >= new_needed:
-                                break
-                            while placed < new_needed and _planet_has_slot(ext.option.planet.planet_id):
-                                char_name = _assign_character(ext.option.planet.planet_id)
-                                result.assignments.append(ColonyAssignment(
-                                    planet_id=ext.option.planet.planet_id,
-                                    planet_type=ext.option.planet.planet_type.name,
-                                    setup=SetupType.R0_TO_P1,
-                                    product=material_name,
-                                    num_factories=ext.option.max_factories,
-                                    isk_per_day=0.0, volume_per_day=0.0,
-                                    details=f"r0_to_p1 on {ext.option.planet.planet_type.name} (feeding {unit.product})",
-                                    category="feed", feeds=f"-> {unit.product} factory",
-                                    character=char_name,
-                                ))
-                                colonies_used += 1
-                                placed += 1
-                    else:
-                        candidate_options_raw = [
-                            opt for opt in matrix
-                            if opt.setup == feeder_setup and opt.product == material_name
-                        ]
-                        placed = 0
-                        for fopt in candidate_options_raw:
-                            if placed >= new_needed:
-                                break
-                            while placed < new_needed and _planet_has_slot(fopt.planet.planet_id):
-                                char_name = _assign_character(fopt.planet.planet_id)
-                                result.assignments.append(ColonyAssignment(
-                                    planet_id=fopt.planet.planet_id,
-                                    planet_type=fopt.planet.planet_type.name,
-                                    setup=feeder_setup, product=material_name,
-                                    num_factories=fopt.max_factories,
-                                    isk_per_day=0.0, volume_per_day=0.0,
-                                    details=f"{feeder_setup.value} on {fopt.planet.planet_type.name} (feeding {unit.product})",
-                                    category="feed", feeds=f"-> {unit.product} factory",
-                                    character=char_name,
-                                ))
-                                colonies_used += 1
-                                placed += 1
-                    feeder_p1_colonies[(material_name, feeder_setup)] = feeder_p1_colonies.get((material_name, feeder_setup), 0) + placed
-                    allocated_products.add(material_name)
-
-                allocated_products.add(unit.product)
-                break
-
-    # --- Step 2: Hauling-optimized allocation ---
-    # Repeat passes through units to allow multiple instances of the same product.
-    # Each pass tries to allocate one instance of each unit.
-    # Stops when a full pass adds nothing (all planet slots exhausted or volume full).
+    # 4. Shipping pass: iterate units, allocate if volume fits
+    volume_used = 0.0
     prev_colonies = -1
-    while colonies_used > prev_colonies and colonies_used < max_colonies:
-        prev_colonies = colonies_used
+    while _colonies_used() > prev_colonies and _colonies_used() < max_colonies:
+        prev_colonies = _colonies_used()
         for unit in units:
-            if colonies_used >= max_colonies:
+            if _colonies_used() >= max_colonies:
                 break
             if volume_used + unit.volume_per_day > max_volume_per_day:
                 continue
-
-            if unit.kind == "standalone":
-                if colonies_used + 1 > max_colonies:
-                    continue
-                if not _planet_has_slot(unit.factory_option.option.planet.planet_id):
-                    continue
-                char_name = _assign_character(unit.factory_option.option.planet.planet_id)
-                result.assignments.append(ColonyAssignment(
-                    planet_id=unit.factory_option.option.planet.planet_id,
-                    planet_type=unit.factory_option.option.planet.planet_type.name,
-                    setup=unit.factory_option.option.setup,
-                    product=unit.product,
-                    num_factories=unit.factory_option.option.max_factories,
-                    isk_per_day=unit.isk_per_day,
-                    volume_per_day=unit.volume_per_day,
-                    details=f"{unit.factory_option.option.setup.value} on {unit.factory_option.option.planet.planet_type.name}",
-                    category="ship",
-                    character=char_name,
-                ))
-                colonies_used += 1
-                volume_used += unit.volume_per_day
-                allocated_products.add(unit.product)
-
-            elif unit.kind == "chain":
-                # Check factory planet has a slot
-                if not _planet_has_slot(unit.factory_option.option.planet.planet_id):
-                    continue
-
-                # Calculate actual additional feeder colonies needed (sharing with existing feeders)
-                # Check total planet slot availability across ALL planets that can produce each input
-                additional_feeders = 0
-                feeder_plan = []
-                chain_feasible = True
-                for material_name, colonies_needed, feeder_opt, feeder_setup in unit.feeder_details:
-                    already_allocated = feeder_p1_colonies.get((material_name, feeder_setup), 0)
-                    new_needed = max(0, colonies_needed - already_allocated)
-                    if feeder_setup == SetupType.R0_TO_P1:
-                        total_available = 0
-                        for s in scored:
-                            if s.option.setup == SetupType.R0_TO_P1 and s.option.product == material_name:
-                                total_available += num_characters - len(planet_character_map.get(s.option.planet.planet_id, set()))
-                        if new_needed > total_available:
-                            chain_feasible = False
-                            break
-                    else:
-                        total_available = 0
-                        for opt in matrix:
-                            if opt.setup == feeder_setup and opt.product == material_name:
-                                total_available += num_characters - len(planet_character_map.get(opt.planet.planet_id, set()))
-                        if new_needed > total_available:
-                            chain_feasible = False
-                            break
-                    additional_feeders += new_needed
-                    feeder_plan.append((material_name, colonies_needed, new_needed, feeder_opt, feeder_setup))
-
-                if not chain_feasible:
-                    continue
-
-                total_new_colonies = 1 + additional_feeders
-                if colonies_used + total_new_colonies > max_colonies:
-                    continue
-
-                # Allocate factory colony
-                char_name = _assign_character(unit.factory_option.option.planet.planet_id)
-                result.assignments.append(ColonyAssignment(
-                    planet_id=unit.factory_option.option.planet.planet_id,
-                    planet_type=unit.factory_option.option.planet.planet_type.name,
-                    setup=unit.setup,
-                    product=unit.product,
-                    num_factories=unit.factory_option.option.max_factories,
-                    isk_per_day=unit.isk_per_day,
-                    volume_per_day=unit.volume_per_day,
-                    details=f"{unit.setup.value} on {unit.factory_option.option.planet.planet_type.name} ({unit.factory_option.option.max_factories} factories)",
-                    category="ship",
-                    character=char_name,
-                ))
-                colonies_used += 1
-
-                # Allocate feeder colonies
-                for material_name, total_needed, new_needed, feeder_opt, feeder_setup in feeder_plan:
-                    if feeder_setup == SetupType.R0_TO_P1:
-                        candidate_options = [
-                            s for s in scored
-                            if s.option.setup == SetupType.R0_TO_P1
-                            and s.option.product == material_name
-                            and s.isk_per_day > 0
-                        ]
-                        placed = 0
-                        for ext in candidate_options:
-                            if placed >= new_needed:
-                                break
-                            while placed < new_needed and _planet_has_slot(ext.option.planet.planet_id):
-                                char_name = _assign_character(ext.option.planet.planet_id)
-                                result.assignments.append(ColonyAssignment(
-                                    planet_id=ext.option.planet.planet_id,
-                                    planet_type=ext.option.planet.planet_type.name,
-                                    setup=SetupType.R0_TO_P1,
-                                    product=material_name,
-                                    num_factories=ext.option.max_factories,
-                                    isk_per_day=0.0, volume_per_day=0.0,
-                                    details=f"r0_to_p1 on {ext.option.planet.planet_type.name} (feeding {unit.product})",
-                                    category="feed", feeds=f"-> {unit.product} factory",
-                                    character=char_name,
-                                ))
-                                colonies_used += 1
-                                placed += 1
-                    else:
-                        candidate_options_raw = [
-                            opt for opt in matrix
-                            if opt.setup == feeder_setup and opt.product == material_name
-                        ]
-                        placed = 0
-                        for fopt in candidate_options_raw:
-                            if placed >= new_needed:
-                                break
-                            while placed < new_needed and _planet_has_slot(fopt.planet.planet_id):
-                                char_name = _assign_character(fopt.planet.planet_id)
-                                result.assignments.append(ColonyAssignment(
-                                    planet_id=fopt.planet.planet_id,
-                                    planet_type=fopt.planet.planet_type.name,
-                                    setup=feeder_setup, product=material_name,
-                                    num_factories=fopt.max_factories,
-                                    isk_per_day=0.0, volume_per_day=0.0,
-                                    details=f"{feeder_setup.value} on {fopt.planet.planet_type.name} (feeding {unit.product})",
-                                    category="feed", feeds=f"-> {unit.product} factory",
-                                    character=char_name,
-                                ))
-                                colonies_used += 1
-                                placed += 1
-                    feeder_p1_colonies[(material_name, feeder_setup)] = feeder_p1_colonies.get((material_name, feeder_setup), 0) + placed
-
+            used = _try_allocate_unit(
+                unit, result, "ship", scored, matrix, game_data,
+                planet_character_map, character_colony_counts,
+                constraints, feeder_p1_colonies,
+            )
+            if used > 0:
                 volume_used += unit.volume_per_day
 
-    # --- Step 3: Fill remaining slots with stockpile extraction ---
-    # Repeat passes to allow duplicate products until all slots filled
-    prev_stockpile = -1
-    while colonies_used > prev_stockpile and colonies_used < max_colonies:
-        prev_stockpile = colonies_used
-        extraction_options = [
-            s for s in scored
-            if s.option.setup in (SetupType.R0_TO_P1, SetupType.R0_TO_P2)
-            and s.isk_per_day > 0
-        ]
-        extraction_options.sort(key=lambda s: s.isk_per_day, reverse=True)
-        for s in extraction_options:
-            if colonies_used >= max_colonies:
-                break
-            if not _planet_has_slot(s.option.planet.planet_id):
-                continue
-            char_name = _assign_character(s.option.planet.planet_id)
-            result.assignments.append(ColonyAssignment(
-                planet_id=s.option.planet.planet_id,
-                planet_type=s.option.planet.planet_type.name,
-                setup=s.option.setup,
-                product=s.option.product,
-                num_factories=s.option.max_factories,
-                isk_per_day=s.isk_per_day,
-                volume_per_day=s.volume_per_day,
-                details=f"{s.option.setup.value} on {s.option.planet.planet_type.name}",
-                category="stockpile",
-                character=char_name,
-            ))
-            colonies_used += 1
+    # 5. Stockpile pass: fill remaining slots ignoring volume constraint
+    if not constraints.volume_unlimited:
+        prev_stockpile = -1
+        while _colonies_used() > prev_stockpile and _colonies_used() < max_colonies:
+            prev_stockpile = _colonies_used()
+            # Use extraction options from scored list, sorted by ISK/day
+            extraction_options = sorted(
+                [s for s in scored
+                 if s.option.setup in (SetupType.R0_TO_P1, SetupType.R0_TO_P2)
+                 and s.isk_per_day > 0],
+                key=lambda s: s.isk_per_day, reverse=True,
+            )
+            for s in extraction_options:
+                if _colonies_used() >= max_colonies:
+                    break
+                pid = s.option.planet.planet_id
+                used_on_planet = planet_character_map.get(pid, set())
+                if len(used_on_planet) >= num_characters:
+                    continue
+                # Assign character directly (inline for stockpile simplicity)
+                available = [
+                    c for c in constraints.characters
+                    if c.name not in used_on_planet and character_colony_counts[c.name] < c.max_planets
+                ]
+                if not available:
+                    continue
+                best = max(available, key=lambda c: c.max_planets - character_colony_counts[c.name])
+                if pid not in planet_character_map:
+                    planet_character_map[pid] = set()
+                planet_character_map[pid].add(best.name)
+                character_colony_counts[best.name] += 1
+                result.assignments.append(ColonyAssignment(
+                    planet_id=pid,
+                    planet_type=s.option.planet.planet_type.name,
+                    setup=s.option.setup,
+                    product=s.option.product,
+                    num_factories=s.option.max_factories,
+                    isk_per_day=s.isk_per_day,
+                    volume_per_day=s.volume_per_day,
+                    details=f"{s.option.setup.value} on {s.option.planet.planet_type.name}",
+                    category="stockpile",
+                    character=best.name,
+                ))
 
-    # Build totals: total_volume_per_day counts only shipped volume (within hauling budget)
+    # Build totals: total_volume_per_day counts only shipped volume
     result.total_isk_per_day = sum(a.isk_per_day for a in result.assignments)
     result.total_volume_per_day = sum(
         a.volume_per_day for a in result.assignments if a.category == "ship"
