@@ -326,9 +326,14 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
             for role, tid in pt.structures.items():
                 if tid is not None:
                     id_to_role[tid] = role
+            extractor_heads = 0
             for pin in template.get("P", []):
                 role = id_to_role.get(pin.get("T"), "unknown")
                 counts[role] = counts.get(role, 0) + 1
+                if role == "extractor" and pin.get("H", 0) > 0:
+                    extractor_heads += pin["H"]
+            if extractor_heads > 0:
+                counts["extractor_heads"] = extractor_heads
         return JSONResponse({"template": template, "counts": counts})
 
     # Fallback to reference templates — log this since it shouldn't happen normally

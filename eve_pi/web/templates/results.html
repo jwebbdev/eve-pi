@@ -266,7 +266,7 @@
                 // Build structure summary from API counts
                 const c = data.counts || {};
                 const parts = [];
-                if (c.extractor) parts.push(`${c.extractor} ECU`);
+                if (c.extractor) parts.push(`${c.extractor} ECU (${c.extractor_heads || '?'} heads)`);
                 if (c.basic_factory) parts.push(`${c.basic_factory} Basic`);
                 if (c.advanced_factory) parts.push(`${c.advanced_factory} Adv`);
                 if (c.hightech_factory) parts.push(`${c.hightech_factory} HT`);
