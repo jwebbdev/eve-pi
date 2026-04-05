@@ -337,6 +337,69 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
     return JSONResponse({"template": converted})
 
 
+@app.get("/api/system-products/{system_name}", response_class=JSONResponse)
+async def get_system_products(system_name: str):
+    """Get all products that can be produced in a system based on its planet types."""
+    esi = ESIClient()
+    system_id = esi.resolve_system_id(system_name)
+    if not system_id:
+        return JSONResponse({"error": f"System '{system_name}' not found"}, status_code=404)
+
+    raw_planets = esi.fetch_system_planets(system_id)
+    PLANET_TYPE_MAP = {11: "Temperate", 12: "Ice", 13: "Gas", 2014: "Oceanic",
+                       2015: "Lava", 2016: "Barren", 2017: "Storm", 2063: "Plasma"}
+
+    # Collect all R0 resources available
+    r0_available = set()
+    has_p4_planet = False
+    for p in raw_planets:
+        pt_name = PLANET_TYPE_MAP.get(p["type_id"])
+        if pt_name and pt_name in game_data.planet_types:
+            for r0 in game_data.planet_types[pt_name].resources:
+                r0_available.add(r0)
+            if game_data.planet_types[pt_name].p4_capable:
+                has_p4_planet = True
+
+    # Trace production chain
+    p1_available = set()
+    for p1_name, recipe in game_data.recipes.get("r0_to_p1", {}).items():
+        if recipe.inputs[0][0] in r0_available:
+            p1_available.add(p1_name)
+
+    p2_available = set()
+    for p2_name, recipe in game_data.recipes.get("p1_to_p2", {}).items():
+        if all(inp[0] in p1_available for inp in recipe.inputs):
+            p2_available.add(p2_name)
+
+    p3_available = set()
+    for p3_name, recipe in game_data.recipes.get("p2_to_p3", {}).items():
+        if all(inp[0] in p2_available for inp in recipe.inputs):
+            p3_available.add(p3_name)
+
+    p4_available = set()
+    if has_p4_planet:
+        for p4_name, recipe in game_data.recipes.get("p3_to_p4", {}).items():
+            inputs_ok = True
+            for inp_name, qty in recipe.inputs:
+                tier = game_data.get_material_tier(inp_name)
+                if tier == "p3" and inp_name not in p3_available:
+                    inputs_ok = False
+                elif tier == "p1" and inp_name not in p1_available:
+                    inputs_ok = False
+            if inputs_ok:
+                p4_available.add(p4_name)
+
+    return JSONResponse({
+        "system": system_name,
+        "products": {
+            "p1": sorted(p1_available),
+            "p2": sorted(p2_available),
+            "p3": sorted(p3_available),
+            "p4": sorted(p4_available),
+        }
+    })
+
+
 def _sanitize(text: str, max_length: int = MAX_FEEDBACK_LENGTH) -> str:
     """Sanitize user input: escape HTML, strip control chars, enforce length."""
     text = text[:max_length]

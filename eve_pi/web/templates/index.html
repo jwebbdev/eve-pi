@@ -155,7 +155,13 @@
     </div>
 
     <div class="panel">
-        <div class="panel-header">Manufacturing Needs (Optional)</div>
+        <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Manufacturing Needs (Optional)</span>
+            <button type="button" class="btn btn-sm" onclick="populateSystemProducts()"
+                    title="Filter product list to items this system can produce">
+                Load System Products
+            </button>
+        </div>
         <div id="manufacturing" class="dynamic-section">
             {% if form_values and form_values.manufacturing_needs %}
                 {% for need in form_values.manufacturing_needs %}
@@ -436,6 +442,48 @@
         document.getElementById('configSelect').value = '';
         // Clear sessionStorage
         sessionStorage.removeItem('eve_pi_last_form');
+    }
+
+    // System products filtering for manufacturing needs
+    let systemProducts = null;  // cached after first load
+
+    function populateSystemProducts() {
+        const system = document.getElementById('system').value.trim();
+        if (!system) {
+            alert('Enter a system name first');
+            return;
+        }
+        fetch(`/api/system-products/${encodeURIComponent(system)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                systemProducts = data.products;
+                // Rebuild the productOptionsHTML with only available products
+                let html = '<option value="">-- Select Product --</option>';
+                for (const tier of ['p1', 'p2', 'p3', 'p4']) {
+                    const prods = systemProducts[tier];
+                    if (prods && prods.length > 0) {
+                        html += `<optgroup label="${tier.toUpperCase()}">`;
+                        for (const prod of prods) {
+                            html += `<option value="${prod}">${prod}</option>`;
+                        }
+                        html += '</optgroup>';
+                    }
+                }
+                productOptionsHTML = html;
+                // Update existing dropdowns
+                document.querySelectorAll('#manufacturing select[name="mfg_product"]').forEach(sel => {
+                    const current = sel.value;
+                    sel.innerHTML = html;
+                    if (current) sel.value = current;
+                });
+                const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
+                alert(`Loaded ${total} producible items for ${system}`);
+            })
+            .catch(err => alert('Failed to load system products: ' + err));
     }
 
     // Initialize dropdown on page load
