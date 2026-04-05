@@ -296,11 +296,13 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
     radius_km = float(request.query_params.get("radius_km", 5000))
     ccu_level = int(request.query_params.get("ccu_level", 5))
     cycle_days = float(request.query_params.get("cycle_days", 4))
+    lp_count = int(request.query_params.get("lp_count", 4))
 
     # Try the generator first (covers all setup types)
     template = gen_template(setup, planet_type, product,
                             radius_km=radius_km, ccu_level=ccu_level,
-                            game_data=game_data, cycle_days=cycle_days)
+                            game_data=game_data, cycle_days=cycle_days,
+                            lp_count=lp_count)
     if template:
         return JSONResponse({"template": template})
 

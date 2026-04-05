@@ -186,7 +186,19 @@
             <h3 id="templateTitle" style="color:#00d4ff; margin:0;"></h3>
             <button class="btn btn-danger btn-sm" onclick="closeTemplateModal()">X</button>
         </div>
-        <p style="color:#666; font-size:12px; margin-bottom:10px;">Copy this JSON and import it in-game via the PI template import feature.</p>
+        <p style="color:#666; font-size:12px; margin-bottom:10px;">Copy this JSON and import it in-game. Load each LP with equal amounts of all inputs.</p>
+        <div style="display:flex; gap:15px; align-items:center; margin-bottom:10px;">
+            <div>
+                <label style="color:#8888aa; font-size:11px;">Launchpads</label>
+                <select id="templateLpCount" onchange="regenerateTemplate()" style="width:80px;">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4" selected>4</option>
+                </select>
+            </div>
+            <div id="templateInfo" style="color:#80cbc4; font-size:12px;"></div>
+        </div>
         <textarea id="templateJson" readonly rows="12"
                   style="width:100%; background:#0a0a1a; border:1px solid #2a2a4a; color:#c8d6e5; padding:10px; border-radius:4px; font-family:'Courier New',monospace; font-size:11px; resize:vertical;"></textarea>
         <div style="margin-top:10px;">
@@ -204,10 +216,26 @@
     const charCcu = {{ char_ccu | tojson }};
     const restockDays = {{ form_values.restock_days if form_values and form_values.restock_days else constraints.cycle_days }};
 
+    // Store current template params for regeneration
+    let currentTemplateParams = {};
+
     function getTemplate(setup, planetType, product, planetId, character) {
+        currentTemplateParams = {setup, planetType, product, planetId, character};
+        const lpCount = document.getElementById('templateLpCount').value;
+        _fetchTemplate(setup, planetType, product, planetId, character, lpCount);
+    }
+
+    function regenerateTemplate() {
+        const p = currentTemplateParams;
+        if (!p.setup) return;
+        const lpCount = document.getElementById('templateLpCount').value;
+        _fetchTemplate(p.setup, p.planetType, p.product, p.planetId, p.character, lpCount);
+    }
+
+    function _fetchTemplate(setup, planetType, product, planetId, character, lpCount) {
         const radius = planetRadii[planetId] || 5000;
         const ccu = charCcu[character] || 5;
-        const params = `?radius_km=${radius}&ccu_level=${ccu}&cycle_days=${restockDays}`;
+        const params = `?radius_km=${radius}&ccu_level=${ccu}&cycle_days=${restockDays}&lp_count=${lpCount}`;
         fetch(`/api/template/${encodeURIComponent(setup)}/${encodeURIComponent(planetType)}/${encodeURIComponent(product)}${params}`)
             .then(r => r.json())
             .then(data => {
@@ -215,8 +243,14 @@
                     alert(data.error);
                     return;
                 }
+                const t = data.template;
+                // Count factories and LPs from template
+                const numPins = t.P.length;
+                const numLPs = t.P.filter(p => p.S === null).length;
+                const numFac = numPins - numLPs;
+                document.getElementById('templateInfo').textContent = `${numFac} factories, ${numLPs} LPs`;
                 document.getElementById('templateTitle').textContent = `${product} on ${planetType} (${setup})`;
-                document.getElementById('templateJson').value = JSON.stringify(data.template, null, 2);
+                document.getElementById('templateJson').value = JSON.stringify(t, null, 2);
                 document.getElementById('templateModal').style.display = 'block';
             })
             .catch(err => alert('Failed to generate template: ' + err));

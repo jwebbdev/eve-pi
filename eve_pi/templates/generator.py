@@ -21,6 +21,7 @@ def generate_template(
     ccu_level: int = 5,
     game_data: GameData = None,
     cycle_days: float = 4.0,
+    lp_count: int = None,
 ) -> Optional[dict]:
     """Generate a complete EVE-importable template JSON dict.
 
@@ -54,7 +55,7 @@ def generate_template(
     if gen is None:
         return None
 
-    return gen(planet_type, product, radius_km, ccu_level, game_data, cycle_days)
+    return gen(planet_type, product, radius_km, ccu_level, game_data, cycle_days, lp_count)
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +184,7 @@ def _parent_pin(index: int, pin_a: int = 1, pin_b: int = 2) -> int:
 
 def _generate_r0_to_p1(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     recipe = game_data.get_recipe("r0_to_p1", product)
     if not recipe:
@@ -310,7 +311,7 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
 
 def _generate_r0_to_p2(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     p2_recipe = game_data.get_recipe("p1_to_p2", product)
     if not p2_recipe:
@@ -452,11 +453,12 @@ def _generate_r0_to_p2(planet_type_name: str, product: str,
 
 def _generate_p1_to_p2(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
         recipe_tier="p1_to_p2", setup_type=SetupType.P1_TO_P2,
-        factory_key="advanced_factory", label_prefix="P1-P2", cycle_days=cycle_days,
+        factory_key="advanced_factory", label_prefix="P1-P2",
+        cycle_days=cycle_days, lp_count_override=lp_count,
     )
 
 
@@ -466,11 +468,12 @@ def _generate_p1_to_p2(planet_type_name: str, product: str,
 
 def _generate_p2_to_p3(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
         recipe_tier="p2_to_p3", setup_type=SetupType.P2_TO_P3,
-        factory_key="advanced_factory", label_prefix="P2-P3", cycle_days=cycle_days,
+        factory_key="advanced_factory", label_prefix="P2-P3",
+        cycle_days=cycle_days, lp_count_override=lp_count,
     )
 
 
@@ -480,7 +483,7 @@ def _generate_p2_to_p3(planet_type_name: str, product: str,
 
 def _generate_p3_to_p4(planet_type_name: str, product: str,
                        radius_km: float, ccu_level: int,
-                       game_data: GameData, cycle_days: float = 4.0) -> Optional[dict]:
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
     pt = game_data.planet_types[planet_type_name]
     if not pt.p4_capable:
         return None
@@ -488,7 +491,8 @@ def _generate_p3_to_p4(planet_type_name: str, product: str,
     return _generate_factory_setup(
         planet_type_name, product, radius_km, ccu_level, game_data,
         recipe_tier="p3_to_p4", setup_type=SetupType.P3_TO_P4,
-        factory_key="hightech_factory", label_prefix="P3-P4", cycle_days=cycle_days,
+        factory_key="hightech_factory", label_prefix="P3-P4",
+        cycle_days=cycle_days, lp_count_override=lp_count,
     )
 
 
@@ -507,21 +511,52 @@ def _generate_factory_setup(
     factory_key: str,
     label_prefix: str,
     cycle_days: float = 4.0,
+    lp_count_override: int = None,
 ) -> Optional[dict]:
-    from eve_pi.capacity.planet_capacity import calculate_lp_count
-
     pt = game_data.planet_types[planet_type_name]
     recipe = game_data.get_recipe(recipe_tier, product)
     if not recipe:
         return None
 
-    fits, max_factories, details = can_fit(radius_km, ccu_level, setup_type, game_data,
-                                           product_name=product, cycle_days=cycle_days)
-    if not fits:
-        return None
+    # Use override LP count, or calculate from capacity model
+    if lp_count_override and lp_count_override > 0:
+        num_lps = lp_count_override
+        # Calculate max factories with this LP count reserved
+        lp_facility = game_data.facilities["launchpad"]
+        cc = game_data.command_center_levels.get(ccu_level)
+        if not cc:
+            return None
+        min_dist = min_link_distance(radius_km)
+        from eve_pi.capacity.planet_capacity import link_costs as _link_costs
+        lp_mw, lc_tf = _link_costs(min_dist)
+        link_pw_per = lp_mw * 1.5
+        link_cp_per = lc_tf * 1.5
 
-    num_factories = details.get("max_factories", max_factories)
-    num_lps = details.get("launchpad_count", 1)
+        lp_total_cpu = (lp_facility.cpu_tf + link_cp_per) * num_lps
+        lp_total_power = (lp_facility.power_mw + link_pw_per) * num_lps
+        remaining_cpu = cc.cpu_tf - lp_total_cpu
+        remaining_power = cc.power_mw - lp_total_power
+
+        factory = game_data.facilities[factory_key]
+        cost_cpu = factory.cpu_tf + link_cp_per
+        cost_power = factory.power_mw + link_pw_per
+
+        if remaining_cpu <= 0 or remaining_power <= 0:
+            return None
+        num_factories = min(
+            int(remaining_cpu / cost_cpu) if cost_cpu > 0 else 0,
+            int(remaining_power / cost_power) if cost_power > 0 else 0,
+        )
+    else:
+        fits, max_factories, details = can_fit(radius_km, ccu_level, setup_type, game_data,
+                                               product_name=product, cycle_days=cycle_days)
+        if not fits:
+            return None
+        num_factories = details.get("max_factories", max_factories)
+        num_lps = details.get("launchpad_count", 1)
+
+    if num_factories < 1:
+        return None
     product_id = game_data.materials[product].type_id
 
     # Resolve input material IDs
@@ -564,15 +599,27 @@ def _generate_factory_setup(
             link_to = factory_start + parent_idx  # parent factory pin (1-indexed)
         links.append({"D": len(pins), "Lv": 0, "S": link_to})
 
-    # Build path from each factory back to LP (following parent chain)
+    # Round-robin LP assignment: factory i -> LP (i % num_lps) + 1
+    # All LPs are linked to LP 1, so routes from LP N go through LP 1 if needed
+    factory_lp = {}  # factory_index -> lp_pin (1-indexed)
+    for i in range(num_factories):
+        factory_lp[i] = (i % num_lps) + 1  # LP pins are 1..num_lps
+
+    # Build path from each factory to its assigned LP (following parent chain)
     def _path_to_lp(factory_index: int) -> List[int]:
-        """Build route path from a factory back to LP 1, following the tree."""
+        """Build route path from a factory to its assigned LP, following the tree."""
+        target_lp = factory_lp[factory_index]
         path = [factory_start + factory_index]
         idx = factory_index
         while True:
             parent_idx = tree[idx][2]
             if parent_idx == -1:
-                path.append(1)  # LP
+                # Reached a hub-connected factory — route to assigned LP
+                if target_lp == 1:
+                    path.append(1)
+                else:
+                    path.append(1)  # go through LP1
+                    path.append(target_lp)  # then to assigned LP
                 break
             else:
                 path.append(factory_start + parent_idx)
@@ -583,15 +630,15 @@ def _generate_factory_setup(
     routes: List[dict] = []
 
     for i in range(num_factories):
-        factory_pin = factory_start + i
+        lp_pin = factory_lp[i]
         path_to_lp = _path_to_lp(i)
         path_from_lp = list(reversed(path_to_lp))
 
-        # Input routes: LP -> factory (one per input material)
+        # Input routes: assigned LP -> factory (one per input material)
         for mat_name, mat_id, qty in input_info:
             routes.append({"P": path_from_lp, "Q": qty, "T": mat_id})
 
-        # Output route: factory -> LP
+        # Output route: factory -> assigned LP
         routes.append({"P": path_to_lp, "Q": recipe.output_per_cycle, "T": product_id})
 
     return {
