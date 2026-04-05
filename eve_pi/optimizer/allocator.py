@@ -725,8 +725,16 @@ def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
     if not _planet_has_slot(factory_planet_id):
         return 0
 
+    # Check global colony limit
+    max_colonies = constraints.total_colonies
+    current_used = sum(character_colony_counts.values())
+    if current_used >= max_colonies:
+        return 0
+
     if unit.kind == "standalone":
         char_name = _assign_character(factory_planet_id)
+        if not char_name:
+            return 0
         result.assignments.append(ColonyAssignment(
             planet_id=factory_planet_id,
             planet_type=unit.factory_option.option.planet.planet_type.name,
@@ -772,6 +780,8 @@ def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
 
     # Allocate factory colony
     char_name = _assign_character(factory_planet_id)
+    if not char_name:
+        return 0
     details_suffix = f" ({unit.factory_option.option.max_factories} factories)" if unit.kind == "chain" else ""
     result.assignments.append(ColonyAssignment(
         planet_id=factory_planet_id,

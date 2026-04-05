@@ -270,3 +270,29 @@ def test_self_sufficient_p2_to_p3_chains():
     assert len(p3_assignments) > 0, (
         f"Expected P2->P3 chain but got: {[(a.product, a.setup.value) for a in result.assignments if a.category == 'ship']}"
     )
+
+
+def test_colony_count_never_exceeds_limit():
+    """With many characters and planets, total colonies must not exceed the limit."""
+    gd = GameData.load()
+    system = SolarSystem(name="BigSystem", system_id=99980, planets=[
+        Planet(planet_id=i, planet_type=gd.planet_types[pt], radius_km=5000.0)
+        for i, pt in enumerate([
+            "Barren", "Barren", "Barren",
+            "Gas", "Gas",
+            "Temperate", "Temperate",
+            "Lava", "Plasma", "Ice", "Storm",
+        ], start=1)
+    ])
+    market = _make_fake_market()
+    # 14 characters × 6 planets = 84 colony slots
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(14)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=0, cargo_capacity_m3=0, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    max_allowed = sum(c.max_planets for c in characters)
+    assert len(result.assignments) <= max_allowed, (
+        f"Allocated {len(result.assignments)} colonies but limit is {max_allowed}"
+    )
