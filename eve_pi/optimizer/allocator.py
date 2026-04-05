@@ -903,16 +903,16 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
                         a.details += f" (mfg need: {need.quantity_per_week}/wk)"
                 break
 
-    # 4. Shipping pass: iterate units, allocate if volume fits
+    # 4. Shipping pass: for each unit (sorted by ISK/colony), fill all available
+    #    slots on that unit's planet before moving to the next unit.
     volume_used = 0.0
-    prev_colonies = -1
-    while _colonies_used() > prev_colonies and _colonies_used() < max_colonies:
-        prev_colonies = _colonies_used()
-        for unit in units:
-            if _colonies_used() >= max_colonies:
-                break
+    for unit in units:
+        if _colonies_used() >= max_colonies:
+            break
+        # Try to allocate this unit repeatedly until the planet is full
+        while _colonies_used() < max_colonies:
             if volume_used + unit.volume_per_day > max_volume_per_day:
-                continue
+                break
             used = _try_allocate_unit(
                 unit, result, "ship", scored, matrix, game_data,
                 planet_character_map, character_colony_counts,
@@ -920,50 +920,22 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
             )
             if used > 0:
                 volume_used += unit.volume_per_day
+            else:
+                break  # planet full or no characters available
 
-    # 5. Stockpile pass: fill remaining slots ignoring volume constraint
+    # 5. Stockpile pass: fill remaining slots ignoring volume, same approach as shipping
     if not constraints.volume_unlimited:
-        prev_stockpile = -1
-        while _colonies_used() > prev_stockpile and _colonies_used() < max_colonies:
-            prev_stockpile = _colonies_used()
-            # Use extraction options from scored list, sorted by ISK/day
-            extraction_options = sorted(
-                [s for s in scored
-                 if s.option.setup in (SetupType.R0_TO_P1, SetupType.R0_TO_P2)
-                 and s.isk_per_day > 0],
-                key=lambda s: s.isk_per_day, reverse=True,
-            )
-            for s in extraction_options:
-                if _colonies_used() >= max_colonies:
+        for unit in units:
+            if _colonies_used() >= max_colonies:
+                break
+            while _colonies_used() < max_colonies:
+                used = _try_allocate_unit(
+                    unit, result, "stockpile", scored, matrix, game_data,
+                    planet_character_map, character_colony_counts,
+                    constraints, feeder_p1_colonies,
+                )
+                if used <= 0:
                     break
-                pid = s.option.planet.planet_id
-                used_on_planet = planet_character_map.get(pid, set())
-                if len(used_on_planet) >= num_characters:
-                    continue
-                # Assign character directly (inline for stockpile simplicity)
-                available = [
-                    c for c in constraints.characters
-                    if c.name not in used_on_planet and character_colony_counts[c.name] < c.max_planets
-                ]
-                if not available:
-                    continue
-                best = max(available, key=lambda c: c.max_planets - character_colony_counts[c.name])
-                if pid not in planet_character_map:
-                    planet_character_map[pid] = set()
-                planet_character_map[pid].add(best.name)
-                character_colony_counts[best.name] += 1
-                result.assignments.append(ColonyAssignment(
-                    planet_id=pid,
-                    planet_type=s.option.planet.planet_type.name,
-                    setup=s.option.setup,
-                    product=s.option.product,
-                    num_factories=s.option.max_factories,
-                    isk_per_day=s.isk_per_day,
-                    volume_per_day=s.volume_per_day,
-                    details=f"{s.option.setup.value} on {s.option.planet.planet_type.name}",
-                    category="stockpile",
-                    character=best.name,
-                ))
 
     # Build totals: total_volume_per_day counts only shipped volume
     result.total_isk_per_day = sum(a.isk_per_day for a in result.assignments)
