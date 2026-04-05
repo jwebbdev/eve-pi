@@ -277,158 +277,27 @@ def _find_reference_template(product: str, setup_value: str) -> Optional[dict]:
     return None
 
 
-def _generate_r0_to_p2_template(planet_type_name: str, p2_product: str,
-                                radius_km: float = 5000.0, ccu_level: int = 5) -> dict:
-    """Generate an R0->P2 template sized to fit the planet and CCU level."""
-    from eve_pi.capacity.planet_capacity import can_fit, SetupType, min_link_distance
-
-    pt = game_data.planet_types[planet_type_name]
-    p2_recipe = game_data.get_recipe("p1_to_p2", p2_product)
-    if not p2_recipe:
-        return None
-
-    p1_a_name = p2_recipe.inputs[0][0]
-    p1_b_name = p2_recipe.inputs[1][0]
-    r0_a_name = game_data.r0_for_p1(p1_a_name)
-    r0_b_name = game_data.r0_for_p1(p1_b_name)
-    if not r0_a_name or not r0_b_name:
-        return None
-
-    # Use capacity model to determine how many basics/heads fit
-    fits, _, details = can_fit(radius_km, ccu_level, SetupType.R0_TO_P2, game_data)
-    if not fits:
-        return None
-
-    num_basics = details.get("basic_factories", 4)
-    num_heads_total = details.get("extractor_heads", 4)
-    basics_per_type = num_basics // 2  # split evenly between P1-A and P1-B
-    heads_per_ecu = min(num_heads_total // 2, 10)
-
-    if basics_per_type < 1:
-        basics_per_type = 1
-
-    p2_id = game_data.materials[p2_product].type_id
-    p1_a_id = game_data.materials[p1_a_name].type_id
-    p1_b_id = game_data.materials[p1_b_name].type_id
-    r0_a_id = game_data.materials[r0_a_name].type_id
-    r0_b_id = game_data.materials[r0_b_name].type_id
-
-    # Calculate angular step from planet radius for tight placement
-    min_link_km = max(1.0, min_link_distance(radius_km))
-    step = (min_link_km / radius_km) * 1.1  # slight padding
-    step = max(step, 0.005)  # minimum step to avoid overlapping pins
-    cx, cy = 1.5, 3.0
-
-    # Build pins: LP(1), Storage(2), Advanced(3), Basic-A(4...), Basic-B(...), ECU-A, ECU-B
-    pins = [
-        {"H": 0, "La": cx, "Lo": cy, "S": None, "T": pt.structures["launchpad"]},
-        {"H": 0, "La": round(cx+step, 5), "Lo": cy, "S": None, "T": pt.structures["storage"]},
-        {"H": 0, "La": round(cx-step, 5), "Lo": cy, "S": p2_id, "T": pt.structures["advanced_factory"]},
-    ]
-    links = [
-        {"D": 2, "Lv": 0, "S": 1},  # LP -> Storage
-        {"D": 3, "Lv": 0, "S": 1},  # LP -> Advanced
-    ]
-
-    # Place Basic-A factories along the +Lo side, alternating LP/Storage connections
-    basic_a_start = len(pins) + 1  # 1-indexed pin number
-    for i in range(basics_per_type):
-        row = i // 2
-        col = i % 2
-        la = round(cx + (col - 0.5) * step, 5)
-        lo = round(cy + step * (1 + row), 5)
-        pins.append({"H": 0, "La": la, "Lo": lo, "S": p1_a_id, "T": pt.structures["basic_factory"]})
-        # Alternate connections: even->LP(1), odd->Storage(2)
-        parent = 1 if i % 2 == 0 else 2
-        links.append({"D": len(pins), "Lv": 0, "S": parent})
-
-    # Place Basic-B factories along the -Lo side
-    basic_b_start = len(pins) + 1
-    for i in range(basics_per_type):
-        row = i // 2
-        col = i % 2
-        la = round(cx + (col - 0.5) * step, 5)
-        lo = round(cy - step * (1 + row), 5)
-        pins.append({"H": 0, "La": la, "Lo": lo, "S": p1_b_id, "T": pt.structures["basic_factory"]})
-        parent = 1 if i % 2 == 0 else 2
-        links.append({"D": len(pins), "Lv": 0, "S": parent})
-
-    # ECUs
-    ecu_a_pin = len(pins) + 1
-    pins.append({"H": heads_per_ecu, "La": round(cx+step*2, 5), "Lo": cy,
-                 "S": r0_a_id, "T": pt.structures["extractor"]})
-    links.append({"D": ecu_a_pin, "Lv": 0, "S": 2})  # -> Storage
-
-    ecu_b_pin = len(pins) + 1
-    pins.append({"H": heads_per_ecu, "La": round(cx-step*2, 5), "Lo": cy,
-                 "S": r0_b_id, "T": pt.structures["extractor"]})
-    links.append({"D": ecu_b_pin, "Lv": 0, "S": 2})  # -> Storage
-
-    # Build routes
-    routes = []
-
-    # R0-A: Storage -> each Basic-A factory
-    for i in range(basics_per_type):
-        pin = basic_a_start + i
-        parent = 1 if i % 2 == 0 else 2
-        path = [2, 1, pin] if parent == 1 else [2, pin]
-        routes.append({"P": path, "Q": 3000, "T": r0_a_id})
-
-    # R0-B: Storage -> each Basic-B factory
-    for i in range(basics_per_type):
-        pin = basic_b_start + i
-        parent = 1 if i % 2 == 0 else 2
-        path = [2, 1, pin] if parent == 1 else [2, pin]
-        routes.append({"P": path, "Q": 3000, "T": r0_b_id})
-
-    # P1-A: Basic-A factories -> Advanced(3)
-    for i in range(basics_per_type):
-        pin = basic_a_start + i
-        parent = 1 if i % 2 == 0 else 2
-        path = [pin, 1, 3] if parent == 1 else [pin, 2, 1, 3]
-        routes.append({"P": path, "Q": 20, "T": p1_a_id})
-
-    # P1-B: Basic-B factories -> Advanced(3)
-    for i in range(basics_per_type):
-        pin = basic_b_start + i
-        parent = 1 if i % 2 == 0 else 2
-        path = [pin, 1, 3] if parent == 1 else [pin, 2, 1, 3]
-        routes.append({"P": path, "Q": 20, "T": p1_b_id})
-
-    # P2 output: Advanced -> Launchpad
-    routes.append({"P": [3, 1], "Q": 5, "T": p2_id})
-
-    # ECU program routes
-    routes.append({"P": [ecu_a_pin, 2], "Q": 3000, "T": r0_a_id})
-    routes.append({"P": [ecu_b_pin, 2], "Q": 3000, "T": r0_b_id})
-
-    return {
-        "CmdCtrLv": ccu_level,
-        "Cmt": f"R0-P2 {p2_product} on {planet_type_name} ({basics_per_type}+{basics_per_type} basic, {heads_per_ecu}+{heads_per_ecu} heads)",
-        "Diam": round(radius_km * 2.0, 1),
-        "L": links,
-        "P": pins,
-        "Pln": pt.type_id,
-        "R": routes,
-    }
-
-
 @app.get("/api/template/{setup}/{planet_type}/{product}", response_class=JSONResponse)
-async def generate_template(setup: str, planet_type: str, product: str, request: Request):
+async def generate_template_route(setup: str, planet_type: str, product: str, request: Request):
     """Generate an importable template for a specific setup."""
     radius_km = float(request.query_params.get("radius_km", 5000))
     ccu_level = int(request.query_params.get("ccu_level", 5))
 
-    # R0->P2: generate programmatically
-    if setup == "r0_to_p2":
-        template = _generate_r0_to_p2_template(planet_type, product, radius_km, ccu_level)
-        if not template:
-            return JSONResponse({"error": f"Cannot generate R0->P2 template for {product} on {planet_type} (CCU {ccu_level}, {radius_km:.0f}km)"}, status_code=404)
+    # Try the generator first (covers all setup types)
+    template = gen_template(setup, planet_type, product,
+                            radius_km=radius_km, ccu_level=ccu_level,
+                            game_data=game_data)
+    if template:
         return JSONResponse({"template": template})
 
+    # Fallback to reference templates
     ref = _find_reference_template(product, setup)
     if not ref:
-        return JSONResponse({"error": f"No reference template found for {product}"}, status_code=404)
+        return JSONResponse(
+            {"error": f"No template available for {product} ({setup}) on {planet_type} "
+                      f"(CCU {ccu_level}, {radius_km:.0f}km)"},
+            status_code=404,
+        )
 
     converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
 
