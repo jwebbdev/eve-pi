@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="4" fill="#1a1a2e"/>
-  <text x="16" y="22" text-anchor="middle" font-family="monospace" font-weight="bold" font-size="16" fill="#00d4ff">PI</text>
-  <circle cx="16" cy="8" r="3" fill="none" stroke="#ffdd00" stroke-width="1"/>
-  <ellipse cx="16" cy="8" rx="6" ry="2" fill="none" stroke="#ffdd00" stroke-width="0.5" opacity="0.6"/>
-</svg>

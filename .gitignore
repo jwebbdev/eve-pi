@@ -1,7 +1,10 @@
 __pycache__/
-*.py[cod]
+*.pyc
 *.egg-info/
+.pi_cache/
 dist/
 build/
-.pi_cache/
 .pytest_cache/
+*.egg
+.claude/
+feedback/

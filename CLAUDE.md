@@ -2,12 +2,8 @@
 
 ## Project Overview
 
-EVE Online Planetary Interaction optimizer. Python library + FastAPI web UI at https://pi.pwnjitsu.org.
+Python library + CLI for EVE Online PI optimization.
 85 tests: `python -m pytest tests/`
-Start server: `python -m eve_pi.web.app --port 8000 --reload` (reload watches `eve_pi/version.txt` only)
-Trigger reload after code changes: `echo N > eve_pi/version.txt` (increment N)
-Caddy SSL: `caddy run` from project root (needs admin terminal)
-User's config file: `j125227.json` (6 characters with individual CCU/IC levels)
 Design spec: `docs/superpowers/specs/2026-04-04-eve-pi-optimizer-rewrite-design.md`
 
 ## Critical Values (Verified In-Game)
@@ -61,7 +57,7 @@ Most R0: 60,000/hr. Exceptions: Autotrophs/Ionic Solutions/Planktic Colonies: 50
 ## EVE Template JSON Format
 
 ### Requirements for game import
-1. **All La/Lo/Diam values MUST be floats** — `3.0` not `3`. JavaScript's `JSON.stringify` drops `.0` on whole numbers. The web UI has `ensureFloats()` to patch clipboard output.
+1. **All La/Lo/Diam values MUST be floats** — `3.0` not `3`. JavaScript's `JSON.stringify` drops `.0` on whole numbers; ensure floats when serializing templates.
 2. **R0 routes CANNOT go through Basic Industry Facilities** — R0 must flow ECU → Storage/Launchpad → Factory. Routes through factories fail silently.
 3. **Single-line compact JSON** on clipboard for paste import.
 4. **Pin references are 1-indexed** in links and routes (not 0-indexed).
@@ -121,12 +117,7 @@ Factories must not exceed head count — a factory without R0 feed is 100% idle.
 4. **Separate placement of LPs and factories** — caused overlapping positions. Unified hex grid solves this.
 5. **Row height = step (not 0.866)** — tried to avoid visual overlap but produced non-uniform spacing. True hex geometry (0.866) works fine; the structures have enough visual clearance.
 6. **Restock days as form input** — removed because LP count is now a direct user choice, and the capacity model no longer uses restock days.
-7. **Server-side config storage** — replaced with browser localStorage for per-user separation without auth.
 
 ## Common Gotchas
 
-- **Starlette 1.0 TemplateResponse** — use `templates.TemplateResponse(request, template_name, context)` not the old dict-as-second-arg pattern
-- **Windows Python path issues** — `reload_dirs` needs absolute paths; `reload_includes` needs relative glob patterns within the reload dir
-- **Git not configured** — the machine has no global git user.name/email. Set per-repo with `git config user.email/name`.
-- **Background commands die** — Claude Code's `run_in_background` bash commands get killed when the task "completes". The user must run long-lived servers (uvicorn, caddy) in their own terminal.
 - **Market cache** — 15-minute TTL. Delete `.pi_cache/orders_*.json` to force fresh fetch.
