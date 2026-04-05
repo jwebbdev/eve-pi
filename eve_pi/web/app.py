@@ -209,8 +209,16 @@ async def run_optimization(request: Request):
             feed_by_factory[factory_product] = []
         feed_by_factory[factory_product].append(a)
 
-    # Build planet radius map for template generation
+    # Build planet radius map and numeral map for template generation
     planet_radii = {p.planet_id: p.radius_km for p in system.planets}
+
+    # Build planet numeral map from ESI names (e.g., "J125227 IV" -> "IV")
+    planet_numerals = {}
+    for rp in raw_planets:
+        name = rp.get("name", "")
+        parts = name.rsplit(" ", 1)
+        if len(parts) == 2:
+            planet_numerals[rp["planet_id"]] = parts[1]
 
     # Build character CCU map
     char_ccu = {c.name: c.ccu_level for c in characters}
@@ -220,6 +228,7 @@ async def run_optimization(request: Request):
                    constraints=constraints,
                    feed_by_factory=feed_by_factory,
                    planet_radii=planet_radii,
+                   planet_numerals=planet_numerals,
                    char_ccu=char_ccu,
                    form_values=form_values,
                    game_data=game_data)

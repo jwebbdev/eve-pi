@@ -56,7 +56,7 @@
                 <td>{{ loop.index }}</td>
                 <td>{{ a.product }}</td>
                 <td>{{ a.setup.value }}</td>
-                <td>{{ a.planet_type }}</td>
+                <td>{{ a.planet_type }}{% if planet_numerals and planet_numerals.get(a.planet_id) %} ({{ planet_numerals[a.planet_id] }}){% endif %}</td>
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 {% set mat = game_data.materials.get(a.product) %}
@@ -73,7 +73,7 @@
                 <td></td>
                 <td>&nbsp;&nbsp;&rarr; {{ fa.product }}</td>
                 <td>{{ fa.setup.value }}</td>
-                <td>{{ fa.planet_type }}</td>
+                <td>{{ fa.planet_type }}{% if planet_numerals and planet_numerals.get(fa.planet_id) %} ({{ planet_numerals[fa.planet_id] }}){% endif %}</td>
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
@@ -117,7 +117,7 @@
                 <td>{{ loop.index }}</td>
                 <td>{{ a.product }}</td>
                 <td>{{ a.setup.value }}</td>
-                <td>{{ a.planet_type }}</td>
+                <td>{{ a.planet_type }}{% if planet_numerals and planet_numerals.get(a.planet_id) %} ({{ planet_numerals[a.planet_id] }}){% endif %}</td>
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
@@ -129,7 +129,7 @@
                 <td></td>
                 <td>&nbsp;&nbsp;&rarr; {{ fa.product }}</td>
                 <td>{{ fa.setup.value }}</td>
-                <td>{{ fa.planet_type }}</td>
+                <td>{{ fa.planet_type }}{% if planet_numerals and planet_numerals.get(fa.planet_id) %} ({{ planet_numerals[fa.planet_id] }}){% endif %}</td>
                 <td>{{ fa.character }}</td>
                 <td class="right"></td>
                 <td class="right">[feed]</td>
@@ -168,7 +168,7 @@
                 <td>{{ loop.index }}</td>
                 <td>{{ a.product }}</td>
                 <td>{{ a.setup.value }}</td>
-                <td>{{ a.planet_type }}</td>
+                <td>{{ a.planet_type }}{% if planet_numerals and planet_numerals.get(a.planet_id) %} ({{ planet_numerals[a.planet_id] }}){% endif %}</td>
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day) }}</td>
