@@ -3,7 +3,11 @@ from eve_pi.data.loader import GameData
 from eve_pi.models.planets import Planet, SolarSystem
 from eve_pi.models.characters import Character
 from eve_pi.market.esi import MarketData
-from eve_pi.optimizer.allocator import optimize, OptimizationConstraints, OptimizationResult
+from eve_pi.optimizer.allocator import (
+    optimize, OptimizationConstraints, OptimizationResult,
+    _build_production_units, _build_opportunity_cost_lookup, _score_options, ScoredOption,
+)
+from eve_pi.optimizer.feasibility import build_feasibility_matrix
 
 
 def _make_test_system(gd: GameData) -> SolarSystem:
@@ -304,3 +308,27 @@ def test_colony_count_never_exceeds_limit():
     assert len(result.assignments) <= max_allowed, (
         f"Allocated {len(result.assignments)} colonies but limit is {max_allowed}"
     )
+
+
+def test_opportunity_cost_lookup_populated():
+    """The lookup should have an entry for each planet type with viable standalone/chain units."""
+    gd = GameData.load()
+    system = _make_test_system(gd)
+    market = _make_fake_market()
+    characters = [Character(name="Char1", ccu_level=5, max_planets=6)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=2, cargo_capacity_m3=60000, tax_rate=0.05,
+    )
+    matrix = build_feasibility_matrix(system, 5, gd)
+    scored = _score_options(matrix, constraints, market, gd)
+    units = _build_production_units(scored, constraints, market, gd, matrix)
+    lookup = _build_opportunity_cost_lookup(units)
+    # Test system has Barren, Gas, Lava, Temperate, Ice — all should have entries
+    assert len(lookup) > 0
+    for planet_type_name, isk_per_colony in lookup.items():
+        assert isk_per_colony > 0, f"{planet_type_name} has non-positive opportunity cost"
+    # Every planet type in the system should appear (all have viable P1 extraction)
+    system_types = {p.planet_type.name for p in system.planets}
+    for pt in system_types:
+        assert pt in lookup, f"Missing planet type {pt} in opportunity cost lookup"
