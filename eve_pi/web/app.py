@@ -451,8 +451,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.reload:
         import eve_pi
-        version_file = str(Path(eve_pi.__file__).parent / "version.txt")
+        pkg_dir = str(Path(eve_pi.__file__).parent)
         uvicorn.run("eve_pi.web.app:app", host=args.host, port=args.port, reload=True,
-                     reload_includes=[version_file])
+                     reload_dirs=[pkg_dir], reload_includes=["version.txt"])
     else:
         uvicorn.run(app, host=args.host, port=args.port)
