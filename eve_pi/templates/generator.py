@@ -49,6 +49,7 @@ def generate_template(
         "p1_to_p2": _generate_p1_to_p2,
         "p2_to_p3": _generate_p2_to_p3,
         "p3_to_p4": _generate_p3_to_p4,
+        "p2_to_p4": _generate_p2_to_p4,
     }
 
     gen = generators.get(setup)
@@ -494,6 +495,230 @@ def _generate_p3_to_p4(planet_type_name: str, product: str,
         factory_key="hightech_factory", label_prefix="P3-P4",
         cycle_days=cycle_days, lp_count_override=lp_count,
     )
+
+
+# ---------------------------------------------------------------------------
+# P2 -> P4 (multi-tier: P2 inputs → internal P3 → P4 output)
+# ---------------------------------------------------------------------------
+
+def _generate_p2_to_p4(planet_type_name: str, product: str,
+                       radius_km: float, ccu_level: int,
+                       game_data: GameData, cycle_days: float = 4.0, lp_count: int = None) -> Optional[dict]:
+    pt = game_data.planet_types[planet_type_name]
+    if not pt.p4_capable:
+        return None
+
+    p4_recipe = game_data.get_recipe("p3_to_p4", product)
+    if not p4_recipe:
+        return None
+
+    # Analyze the full input chain: P4 <- P3s <- P2s (and maybe P1s)
+    # Build list of intermediate P3 factories needed and their P2 inputs
+    intermediates = []  # [(p3_name, p3_recipe, adv_per_ht)]
+    direct_inputs = []  # [(mat_name, mat_id, qty, tier)] for P1 inputs that go direct to HT
+
+    for input_name, qty in p4_recipe.inputs:
+        tier = game_data.get_material_tier(input_name)
+        if tier == "p3":
+            p3_recipe = game_data.get_recipe("p2_to_p3", input_name)
+            if not p3_recipe:
+                return None
+            # Each HT factory needs qty P3/hr. Each Adv produces 3 P3/hr.
+            adv_needed_per_ht = max(1, -(-qty // 3))  # ceiling division
+            intermediates.append((input_name, p3_recipe, adv_needed_per_ht))
+        elif tier in ("p1", "p2"):
+            mat = game_data.materials.get(input_name)
+            if not mat:
+                return None
+            direct_inputs.append((input_name, mat.type_id, qty, tier))
+
+    # Calculate how many HT + Adv fit in the budget
+    import math
+    cc = game_data.command_center_levels.get(ccu_level)
+    if not cc:
+        return None
+
+    min_dist = min_link_distance(radius_km)
+    from eve_pi.capacity.planet_capacity import link_costs as _link_costs
+    lp_mw, lc_tf = _link_costs(min_dist)
+    link_pw = lp_mw * 1.5
+    link_cp = lc_tf * 1.5
+
+    adv = game_data.facilities["advanced_factory"]
+    ht = game_data.facilities["hightech_factory"]
+    lp_fac = game_data.facilities["launchpad"]
+
+    # Collect all unique import materials for LP count
+    import_materials = {}  # name -> (type_id, qty_per_ht_per_hr)
+    for p3_name, p3_recipe, adv_per_ht in intermediates:
+        for p2_name, p2_qty in p3_recipe.inputs:
+            mat = game_data.materials.get(p2_name)
+            if mat and p2_name not in import_materials:
+                import_materials[p2_name] = (mat.type_id, p2_qty)
+    for name, type_id, qty, tier in direct_inputs:
+        if name not in import_materials:
+            import_materials[name] = (type_id, qty)
+
+    # LP count: default from unique input count, or override
+    if lp_count and lp_count > 0:
+        num_lps = lp_count
+    else:
+        num_lps = max(1, math.ceil(len(import_materials) / 3))
+
+    # Total Adv factories needed per HT factory
+    total_adv_per_ht = sum(a for _, _, a in intermediates)
+
+    # Iteratively find max HT factories
+    best_n_ht = 0
+    for n_ht in range(1, 20):
+        n_adv = total_adv_per_ht * n_ht
+
+        lp_cost_cpu = (lp_fac.cpu_tf + link_cp) * num_lps
+        lp_cost_pw = (lp_fac.power_mw + link_pw) * num_lps
+        ht_cost_cpu = (ht.cpu_tf + link_cp) * n_ht
+        ht_cost_pw = (ht.power_mw + link_pw) * n_ht
+        adv_cost_cpu = (adv.cpu_tf + link_cp) * n_adv
+        adv_cost_pw = (adv.power_mw + link_pw) * n_adv
+
+        total_cpu = lp_cost_cpu + ht_cost_cpu + adv_cost_cpu
+        total_pw = lp_cost_pw + ht_cost_pw + adv_cost_pw
+
+        if total_cpu <= cc.cpu_tf and total_pw <= cc.power_mw:
+            best_n_ht = n_ht
+        else:
+            break
+
+    if best_n_ht < 1:
+        return None
+
+    n_ht = best_n_ht
+    p4_id = game_data.materials[product].type_id
+
+    step = _angular_step(radius_km)
+    cx, cy = 1.5, 3.0
+
+    pins: List[dict] = []
+    links: List[dict] = []
+    routes: List[dict] = []
+
+    # Place LPs
+    pins.append({"H": 0, "La": float(round(cx, 5)), "Lo": float(round(cy, 5)),
+                 "S": None, "T": pt.structures["launchpad"]})
+    lp_offsets = [(step, 0), (-step, 0), (0, step), (0, -step), (step, step), (-step, step)]
+    for lp_i in range(1, num_lps):
+        off_la, off_lo = lp_offsets[(lp_i - 1) % len(lp_offsets)]
+        pins.append({"H": 0, "La": float(round(cx + off_la, 5)),
+                     "Lo": float(round(cy + off_lo, 5)),
+                     "S": None, "T": pt.structures["launchpad"]})
+        links.append({"D": len(pins), "Lv": 0, "S": 1})
+
+    # Place HT factories in hex grid near center
+    ht_start = len(pins) + 1
+    ht_positions = _hex_grid_positions(cx, cy, step, n_ht)
+    for i, (la, lo, parent_idx) in enumerate(ht_positions):
+        pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                     "S": p4_id, "T": pt.structures["hightech_factory"]})
+        if parent_idx == -1:
+            links.append({"D": len(pins), "Lv": 0, "S": 1})
+        else:
+            links.append({"D": len(pins), "Lv": 0, "S": ht_start + parent_idx})
+
+    # Place Adv factories for each P3 intermediate, grouped
+    # Track which Adv factories produce which P3 for routing
+    adv_groups = {}  # p3_name -> list of (pin_number, p3_type_id)
+
+    adv_offset_cy = cy + step * 3  # place Adv factories above the HT cluster
+    for inter_idx, (p3_name, p3_recipe, adv_per_ht) in enumerate(intermediates):
+        p3_id = game_data.materials[p3_name].type_id
+        n_adv_for_this = adv_per_ht * n_ht
+        adv_group_pins = []
+
+        group_cx = cx + (inter_idx - len(intermediates) / 2.0 + 0.5) * step * 3
+        group_positions = _hex_grid_positions(group_cx, adv_offset_cy, step, n_adv_for_this)
+
+        for i, (la, lo, parent_idx) in enumerate(group_positions):
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": p3_id, "T": pt.structures["advanced_factory"]})
+            pin_num = len(pins)
+            if parent_idx == -1:
+                # Link to nearest HT factory or LP
+                links.append({"D": pin_num, "Lv": 0, "S": 1})
+            else:
+                adv_start_for_group = pin_num - i
+                links.append({"D": pin_num, "Lv": 0, "S": adv_start_for_group + parent_idx})
+            adv_group_pins.append(pin_num)
+
+        adv_groups[p3_name] = (adv_group_pins, p3_id, p3_recipe)
+
+    # Build adjacency for route pathfinding
+    adj = {}
+    for link in links:
+        s, d = link["S"], link["D"]
+        adj.setdefault(s, set()).add(d)
+        adj.setdefault(d, set()).add(s)
+
+    def _find_path(start: int, end: int) -> Optional[List[int]]:
+        """BFS shortest path between two pins."""
+        from collections import deque
+        if start == end:
+            return [start]
+        visited = {start}
+        queue = deque([(start, [start])])
+        while queue:
+            node, path = queue.popleft()
+            for neighbor in adj.get(node, set()):
+                if neighbor == end:
+                    return path + [neighbor]
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, path + [neighbor]))
+        return None
+
+    # Routes: P2 inputs from LPs to Adv factories
+    for p3_name, (adv_pins, p3_id, p3_recipe) in adv_groups.items():
+        for i, adv_pin in enumerate(adv_pins):
+            assigned_lp = (i % num_lps) + 1
+
+            # P2 input routes: LP -> Adv
+            for p2_name, p2_qty in p3_recipe.inputs:
+                p2_id = game_data.materials[p2_name].type_id
+                path = _find_path(assigned_lp, adv_pin)
+                if path:
+                    routes.append({"P": path, "Q": p2_qty, "T": p2_id})
+
+            # P3 output routes: Adv -> nearest HT factory
+            # Round-robin assign to HT factories
+            target_ht = ht_start + (i % n_ht)
+            path = _find_path(adv_pin, target_ht)
+            if path:
+                routes.append({"P": path, "Q": 3, "T": p3_id})
+
+    # Direct P1 inputs to HT factories (for recipes like Nano-Factory)
+    for name, type_id, qty, tier in direct_inputs:
+        for i in range(n_ht):
+            ht_pin = ht_start + i
+            assigned_lp = (i % num_lps) + 1
+            path = _find_path(assigned_lp, ht_pin)
+            if path:
+                routes.append({"P": path, "Q": qty, "T": type_id})
+
+    # P4 output routes: HT -> LP (round-robin)
+    for i in range(n_ht):
+        ht_pin = ht_start + i
+        assigned_lp = (i % num_lps) + 1
+        path = _find_path(ht_pin, assigned_lp)
+        if path:
+            routes.append({"P": path, "Q": 1, "T": p4_id})
+
+    return {
+        "CmdCtrLv": ccu_level,
+        "Cmt": f"P2-P4 {product} on {planet_type_name} ({n_ht} HT, {total_adv_per_ht * n_ht} Adv, {num_lps} LP)",
+        "Diam": round(radius_km * 2.0, 1),
+        "L": links,
+        "P": pins,
+        "Pln": pt.type_id,
+        "R": routes,
+    }
 
 
 # ---------------------------------------------------------------------------
