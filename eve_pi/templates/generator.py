@@ -612,41 +612,51 @@ def _generate_p2_to_p4(planet_type_name: str, product: str,
                      "S": None, "T": pt.structures["launchpad"]})
         links.append({"D": len(pins), "Lv": 0, "S": 1})
 
-    # Place HT factories in hex grid near center
+    # Place ALL factories in one hex grid offset from the LP cluster
+    # Offset grid center so factories don't overlap with LPs
+    total_adv = total_adv_per_ht * n_ht
+    total_factories = n_ht + total_adv
+    grid_cx = cx
+    grid_cy = cy + step * 2  # offset grid below LP cluster
+    all_positions = _hex_grid_positions(grid_cx, grid_cy, step, total_factories)
+
+    # Assign: first n_ht positions are HT factories
     ht_start = len(pins) + 1
-    ht_positions = _hex_grid_positions(cx, cy, step, n_ht)
-    for i, (la, lo, parent_idx) in enumerate(ht_positions):
+    for i in range(n_ht):
+        la, lo, parent_idx = all_positions[i]
         pins.append({"H": 0, "La": float(la), "Lo": float(lo),
                      "S": p4_id, "T": pt.structures["hightech_factory"]})
-        if parent_idx == -1:
-            links.append({"D": len(pins), "Lv": 0, "S": 1})
+        factory_pin = len(pins)
+        if parent_idx == -1 or parent_idx + ht_start > factory_pin:
+            links.append({"D": factory_pin, "Lv": 0, "S": 1})
         else:
-            links.append({"D": len(pins), "Lv": 0, "S": ht_start + parent_idx})
+            links.append({"D": factory_pin, "Lv": 0, "S": ht_start + parent_idx})
 
-    # Place Adv factories for each P3 intermediate, grouped
-    # Track which Adv factories produce which P3 for routing
-    adv_groups = {}  # p3_name -> list of (pin_number, p3_type_id)
-
-    adv_offset_cy = cy + step * 3  # place Adv factories above the HT cluster
+    # Remaining positions are Adv factories, assigned round-robin to P3 types
+    adv_groups = {}  # p3_name -> (list of pin_numbers, p3_type_id, p3_recipe)
+    adv_start = len(pins) + 1
+    adv_idx = 0
     for inter_idx, (p3_name, p3_recipe, adv_per_ht) in enumerate(intermediates):
         p3_id = game_data.materials[p3_name].type_id
         n_adv_for_this = adv_per_ht * n_ht
         adv_group_pins = []
 
-        group_cx = cx + (inter_idx - len(intermediates) / 2.0 + 0.5) * step * 3
-        group_positions = _hex_grid_positions(group_cx, adv_offset_cy, step, n_adv_for_this)
-
-        for i, (la, lo, parent_idx) in enumerate(group_positions):
+        for j in range(n_adv_for_this):
+            grid_idx = n_ht + adv_idx
+            if grid_idx >= len(all_positions):
+                break
+            la, lo, parent_idx = all_positions[grid_idx]
             pins.append({"H": 0, "La": float(la), "Lo": float(lo),
                          "S": p3_id, "T": pt.structures["advanced_factory"]})
-            pin_num = len(pins)
+            factory_pin = len(pins)
+            # Link to parent in the grid (could be HT or another Adv)
             if parent_idx == -1:
-                # Link to nearest HT factory or LP
-                links.append({"D": pin_num, "Lv": 0, "S": 1})
+                links.append({"D": factory_pin, "Lv": 0, "S": 1})
             else:
-                adv_start_for_group = pin_num - i
-                links.append({"D": pin_num, "Lv": 0, "S": adv_start_for_group + parent_idx})
-            adv_group_pins.append(pin_num)
+                parent_pin = ht_start + parent_idx  # parent is at this grid position
+                links.append({"D": factory_pin, "Lv": 0, "S": parent_pin})
+            adv_group_pins.append(factory_pin)
+            adv_idx += 1
 
         adv_groups[p3_name] = (adv_group_pins, p3_id, p3_recipe)
 

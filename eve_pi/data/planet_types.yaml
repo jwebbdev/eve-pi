@@ -7,7 +7,7 @@ planet_types:
       launchpad: 2256
       basic_factory: 2481
       advanced_factory: 2480
-      hightech_factory: 2482
+      hightech_factory: 2482  # Temperate High-Tech Production Plant (verified via ESI)
       storage: 2562
       command_center: 2254
       extractor: 3068
@@ -19,7 +19,7 @@ planet_types:
       launchpad: 2552
       basic_factory: 2493
       advanced_factory: 2491
-      hightech_factory: 2495
+      hightech_factory: null  # Ice has no High-Tech factory (not P4 capable)
       storage: 2257
       command_center: 2533
       extractor: 3061
@@ -31,7 +31,7 @@ planet_types:
       launchpad: 2543
       basic_factory: 2492
       advanced_factory: 2494
-      hightech_factory: 2497
+      hightech_factory: null  # Gas has no High-Tech factory (not P4 capable)
       storage: 2536
       command_center: 2534
       extractor: 3060
@@ -43,7 +43,7 @@ planet_types:
       launchpad: 2542
       basic_factory: 2490
       advanced_factory: 2485
-      hightech_factory: 2500
+      hightech_factory: null  # Oceanic has no High-Tech factory (not P4 capable)
       storage: 2535
       command_center: 2525
       extractor: 3063
@@ -55,7 +55,7 @@ planet_types:
       launchpad: 2555
       basic_factory: 2469
       advanced_factory: 2470
-      hightech_factory: 2491
+      hightech_factory: null  # Lava has no High-Tech factory (not P4 capable)
       storage: 2558
       command_center: 2549
       extractor: 3062
@@ -67,7 +67,7 @@ planet_types:
       launchpad: 2544
       basic_factory: 2473
       advanced_factory: 2474
-      hightech_factory: 2488
+      hightech_factory: 2475  # Barren High-Tech Production Plant (verified via ESI)
       storage: 2541
       command_center: 2524
       extractor: 2848
@@ -79,7 +79,7 @@ planet_types:
       launchpad: 2557
       basic_factory: 2483
       advanced_factory: 2484
-      hightech_factory: 2494
+      hightech_factory: null  # Storm has no High-Tech factory (not P4 capable)
       storage: 2561
       command_center: 2550
       extractor: 3067
@@ -91,7 +91,7 @@ planet_types:
       launchpad: 2556
       basic_factory: 2471
       advanced_factory: 2472
-      hightech_factory: 2503
+      hightech_factory: null  # Plasma has no High-Tech factory (not P4 capable)
       storage: 2560
       command_center: 2551
       extractor: 3064
