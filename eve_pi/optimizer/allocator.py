@@ -799,6 +799,114 @@ def _restore_allocation_state(snapshot, result, planet_character_map,
     feeder_p1_colonies.update(snapshot["feeder_p1_colonies"])
 
 
+def _swap_optimize_shipping(result, units, scored, matrix, game_data,
+                             planet_character_map, character_colony_counts,
+                             feeder_p1_colonies, constraints):
+    """Pass 2: Swap high-volume shipped colonies for multiple low-volume ones.
+
+    Iteratively removes the worst ISK/m³ shipped colony and re-fills
+    the freed volume (plus any unallocated slots) by ISK/m³ descending.
+    Accepts the swap if total shipped ISK increases, otherwise restores
+    and stops.
+    """
+    max_volume_per_day = constraints.max_volume_per_day
+
+    # Sort units by ISK/m³ for the fill phase
+    units_by_isk_per_m3 = sorted(
+        [u for u in units if u.volume_per_day > 0],
+        key=lambda u: u.isk_per_day / u.volume_per_day,
+        reverse=True,
+    )
+
+    improved = True
+    while improved:
+        improved = False
+
+        # Find shipped colonies sorted by ISK/m³ ascending (worst first)
+        shipped = [a for a in result.assignments if a.category == "ship"]
+        if not shipped:
+            break
+
+        shipped_by_efficiency = sorted(
+            shipped,
+            key=lambda a: a.isk_per_day / a.volume_per_day if a.volume_per_day > 0 else float('inf'),
+        )
+
+        for candidate in shipped_by_efficiency:
+            # Snapshot state before attempting swap
+            snapshot = _snapshot_allocation_state(result, planet_character_map,
+                                                  character_colony_counts, feeder_p1_colonies)
+            old_shipped_isk = sum(a.isk_per_day for a in result.assignments if a.category == "ship")
+
+            # Remove candidate and all its feeders from allocations
+            candidate_planet_id = candidate.planet_id
+            candidate_character = candidate.character
+            candidate_volume = candidate.volume_per_day
+
+            # Find all assignments related to this shipped colony
+            # (the colony itself + any feed colonies that reference its product)
+            to_remove = [candidate]
+            # If this is a chain factory, find its feeders
+            if candidate.category == "ship":
+                feed_label = f"-> {candidate.product} factory"
+                to_remove.extend(
+                    a for a in result.assignments
+                    if a.category == "feed" and a.feeds == feed_label
+                )
+
+            # Deallocate each removed assignment
+            for a in to_remove:
+                if a in result.assignments:
+                    result.assignments.remove(a)
+                    if a.planet_id in planet_character_map and a.character in planet_character_map[a.planet_id]:
+                        planet_character_map[a.planet_id].discard(a.character)
+                        if not planet_character_map[a.planet_id]:
+                            del planet_character_map[a.planet_id]
+                    character_colony_counts[a.character] -= 1
+                    # Update feeder tracking
+                    if a.category == "feed":
+                        key = (a.product, a.setup)
+                        if key in feeder_p1_colonies:
+                            feeder_p1_colonies[key] = max(0, feeder_p1_colonies[key] - 1)
+
+            # Calculate freed volume and current shipped volume
+            current_shipped_volume = sum(
+                a.volume_per_day for a in result.assignments if a.category == "ship"
+            )
+            available_volume = max_volume_per_day - current_shipped_volume
+
+            # Fill freed volume by ISK/m³ with all available units
+            for unit in units_by_isk_per_m3:
+                if sum(character_colony_counts.values()) >= constraints.total_colonies:
+                    break
+                while sum(character_colony_counts.values()) < constraints.total_colonies:
+                    if unit.volume_per_day > available_volume:
+                        break
+                    used = _try_allocate_unit(
+                        unit, result, "ship", scored, matrix, game_data,
+                        planet_character_map, character_colony_counts,
+                        constraints, feeder_p1_colonies,
+                    )
+                    if used > 0:
+                        available_volume -= unit.volume_per_day
+                    else:
+                        break
+
+            new_shipped_isk = sum(a.isk_per_day for a in result.assignments if a.category == "ship")
+
+            if new_shipped_isk > old_shipped_isk:
+                # Swap improved things — accept and try again
+                improved = True
+                break  # restart the while loop with new shipped set
+            else:
+                # Swap didn't help — restore and try next candidate
+                _restore_allocation_state(snapshot, result, planet_character_map,
+                                          character_colony_counts, feeder_p1_colonies)
+                continue
+
+        # If we tried all candidates and none improved, improved stays False and we exit
+
+
 def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
                        planet_character_map, character_colony_counts,
                        constraints, feeder_p1_colonies) -> int:
@@ -1217,7 +1325,14 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
             else:
                 break  # planet full or no characters available
 
-    # 5. Stockpile pass: fill remaining slots ignoring volume, same approach as shipping
+    # 5. Swap optimization pass: when volume-constrained, try replacing high-volume
+    #    shipped colonies with multiple low-volume ones for more total shipped ISK
+    if not constraints.volume_unlimited:
+        _swap_optimize_shipping(result, units, scored, matrix, game_data,
+                                 planet_character_map, character_colony_counts,
+                                 feeder_p1_colonies, constraints)
+
+    # 6. Stockpile pass: fill remaining slots ignoring volume, same approach as shipping
     if not constraints.volume_unlimited:
         for unit in units:
             if _colonies_used() >= max_colonies:

@@ -418,6 +418,53 @@ def test_p3_to_p4_chain_opportunity_cost():
     )
 
 
+def test_swap_pass_improves_shipped_isk():
+    """When volume-constrained, swap pass should replace high-volume colonies with
+    multiple low-volume colonies for more total shipped ISK."""
+    gd = GameData.load()
+    # System with Temperate (high ISK/colony R0->P1) and Plasma (R0->P2 lower ISK but tiny volume)
+    system = SolarSystem(name="SwapTest", system_id=99950, planets=[
+        Planet(planet_id=i, planet_type=gd.planet_types[pt], radius_km=5000.0)
+        for i, pt in enumerate([
+            "Temperate", "Temperate", "Temperate",
+            "Plasma", "Plasma", "Plasma",
+            "Barren", "Barren",
+            "Gas", "Gas",
+            "Lava", "Lava",
+        ], start=1)
+    ])
+    market = _make_fake_market()
+    # Many characters = many colony slots, tight volume budget
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(6)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=1, cargo_capacity_m3=20000, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+
+    shipped = [a for a in result.assignments if a.category == "ship"]
+    stockpiled = [a for a in result.assignments if a.category == "stockpile"]
+
+    # With a tight volume budget (20,000 m3/week = ~2,857 m3/day), a single R0->P1
+    # colony uses ~1,824 m3/day. The swap pass should find that replacing it with
+    # many R0->P2 colonies (90 m3/day each) yields more total ISK.
+    # Verify: shipped set should contain R0->P2 colonies if swap was effective.
+    r0_p2_shipped = [a for a in shipped if a.setup == SetupType.R0_TO_P2]
+    r0_p1_shipped = [a for a in shipped if a.setup == SetupType.R0_TO_P1]
+
+    # The swap should have included at least some R0->P2 in shipped
+    # (without swap pass, pure ISK/colony would only ship R0->P1)
+    total_shipped_isk = sum(a.isk_per_day for a in shipped)
+    assert total_shipped_isk > 0
+
+    # With such a tight budget, we expect the swap pass to have replaced at least
+    # one R0->P1 with multiple R0->P2 colonies
+    assert len(r0_p2_shipped) > 0, (
+        f"Expected R0->P2 in shipped set after swap optimization but got: "
+        f"{[(a.product, a.setup.value, a.isk_per_day, a.volume_per_day) for a in shipped]}"
+    )
+
+
 def test_snapshot_restore_allocation_state():
     """Snapshot and restore should preserve allocation state exactly."""
     from eve_pi.optimizer.allocator import OptimizationResult, ColonyAssignment
