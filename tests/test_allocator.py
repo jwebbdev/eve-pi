@@ -310,6 +310,55 @@ def test_colony_count_never_exceeds_limit():
     )
 
 
+def test_p2_to_p3_chain_opportunity_cost():
+    """P2->P3 chains should be less profitable after opportunity cost subtraction."""
+    gd = GameData.load()
+    system = SolarSystem(name="TestOppCost", system_id=99970, planets=[
+        Planet(planet_id=i, planet_type=gd.planet_types[pt], radius_km=5000.0)
+        for i, pt in enumerate([
+            "Gas", "Gas", "Gas", "Gas", "Gas",
+            "Lava", "Lava", "Lava",
+            "Barren", "Barren",
+            "Temperate", "Temperate",
+            "Plasma", "Plasma",
+        ], start=1)
+    ])
+    market = _make_fake_market()
+    # Set P3 prices to a moderate level — high enough that chains are built,
+    # but low enough that opportunity cost could eliminate marginal ones
+    for p3_name in ["Robotics", "Guidance Systems"]:
+        market[p3_name] = MarketData(
+            type_id=0, name=p3_name, buy_price=200000,
+            sell_orders=[{"price": 190000, "volume_remain": 100000}],
+        )
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(10)]
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=0, cargo_capacity_m3=0, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+    # Any P2->P3 chain that was allocated should have positive ISK/day
+    # (chains that went negative after opp cost are excluded)
+    for a in result.assignments:
+        if a.setup == SetupType.P2_TO_P3:
+            assert a.isk_per_day > 0, f"P2->P3 chain {a.product} has non-positive ISK/day"
+    # The P2->P3 chains should have lower ISK/colony than without opportunity cost.
+    # We verify this indirectly: if P3 prices are set just barely above P1 standalone value,
+    # chains should NOT appear. Set P3 low to verify.
+    market_low = dict(market)
+    for p3_name in ["Robotics", "Guidance Systems"]:
+        market_low[p3_name] = MarketData(
+            type_id=0, name=p3_name, buy_price=5000,
+            sell_orders=[{"price": 4750, "volume_remain": 100000}],
+        )
+    result_low = optimize(constraints, market_low, gd)
+    p3_low = [a for a in result_low.assignments if a.setup == SetupType.P2_TO_P3]
+    assert len(p3_low) == 0, (
+        f"Low-price P3 chains should be eliminated by opportunity cost but got: "
+        f"{[(a.product, a.isk_per_day) for a in p3_low]}"
+    )
+
+
 def test_opportunity_cost_lookup_populated():
     """The lookup should have an entry for each planet type with viable standalone/chain units."""
     gd = GameData.load()

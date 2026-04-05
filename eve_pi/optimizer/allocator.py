@@ -403,6 +403,9 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
         )
         units.append(unit)
 
+    # Build opportunity cost lookup from standalone + P1->P2 chain units
+    opp_cost_lookup = _build_opportunity_cost_lookup(units)
+
     # Step 3: P2->P3 factory chains
     # A P2->P3 chain: 1 P2->P3 factory + N P1->P2 intermediate factories + M extraction colonies
     p2_to_p3_factory_options: Dict[str, FeasibleOption] = {}
@@ -512,6 +515,20 @@ def _build_production_units(scored, constraints, market_data, game_data, matrix)
                 break
 
         if not feasible:
+            continue
+
+        # Subtract opportunity cost: what each colony could earn independently
+        opportunity_cost = 0.0
+        # Factory planet
+        factory_pt = p3_opt.planet.planet_type.name
+        opportunity_cost += opp_cost_lookup.get(factory_pt, 0.0)
+        # All feeder colonies
+        for _, colonies_needed, feeder_scored, _ in feeder_details:
+            feeder_pt = feeder_scored.option.planet.planet_type.name
+            opportunity_cost += opp_cost_lookup.get(feeder_pt, 0.0) * colonies_needed
+        chain_isk -= opportunity_cost
+
+        if chain_isk <= 0:
             continue
 
         total_colonies = 1 + total_feeder_colonies
