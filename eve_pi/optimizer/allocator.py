@@ -879,6 +879,181 @@ def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
     return colonies_allocated
 
 
+def _build_minimal_chain(product_name: str, game_data: GameData, constraints,
+                         scored, matrix, market_data) -> Optional[_ProductionUnit]:
+    """Build a minimal production chain for a product using 1 factory per tier.
+
+    For P4: 1 HT + 1 P3 factory per P3 input + 1 P2 factory per P2 input + extraction
+    For P3: 1 Advanced P3 + 1 P2 factory per P2 input + extraction
+    For P2: 1 Advanced P2 + extraction
+    """
+    tier = game_data.get_material_tier(product_name)
+    if not tier or tier == "p1":
+        return None
+
+    system_planet_types = {p.planet_type.name for p in constraints.system.planets}
+    extraction_by_p1 = {}
+    for s in scored:
+        if s.option.setup == SetupType.R0_TO_P1 and s.isk_per_day > 0:
+            if s.option.product not in extraction_by_p1 or s.isk_per_day > extraction_by_p1[s.option.product].isk_per_day:
+                extraction_by_p1[s.option.product] = s
+
+    def _trace_p1_needs(mat_name: str, mat_tier: str) -> Optional[List[Tuple]]:
+        """Recursively trace a material back to P1 extraction needs.
+        Returns list of (material_name, colonies_needed, scored_option, setup_type) feeder entries,
+        or None if infeasible."""
+        feeders = []
+
+        if mat_tier == "p1":
+            # Direct extraction
+            r0_name = game_data.r0_for_p1(mat_name)
+            if not r0_name:
+                return None
+            if not any(pt in system_planet_types for pt in game_data.planet_types_for_r0(r0_name)):
+                return None
+            ext_opt = extraction_by_p1.get(mat_name)
+            if not ext_opt:
+                return None
+            feeders.append((mat_name, 1, ext_opt, SetupType.R0_TO_P1))
+            return feeders
+
+        elif mat_tier == "p2":
+            # Need a P2 factory + extraction for its P1 inputs
+            p2_recipe = game_data.get_recipe("p1_to_p2", mat_name)
+            if not p2_recipe:
+                return None
+            # 1 P2 factory colony
+            p2_opt = None
+            for opt in matrix:
+                if opt.setup == SetupType.P1_TO_P2 and opt.product == mat_name:
+                    p2_opt = opt
+                    break
+            if not p2_opt:
+                return None
+            s = ScoredOption(option=p2_opt, isk_per_day=0.0, isk_per_colony=0.0, volume_per_day=0.0)
+            feeders.append((mat_name, 1, s, SetupType.P1_TO_P2))
+            # Plus extraction for each P1 input
+            for p1_name, _ in p2_recipe.inputs:
+                p1_feeders = _trace_p1_needs(p1_name, "p1")
+                if p1_feeders is None:
+                    return None
+                feeders.extend(p1_feeders)
+            return feeders
+
+        elif mat_tier == "p3":
+            # Need a P3 factory + P2 factories + extraction
+            p3_recipe = game_data.get_recipe("p2_to_p3", mat_name)
+            if not p3_recipe:
+                return None
+            p3_opt = None
+            for opt in matrix:
+                if opt.setup == SetupType.P2_TO_P3 and opt.product == mat_name:
+                    p3_opt = opt
+                    break
+            if not p3_opt:
+                return None
+            s = ScoredOption(option=p3_opt, isk_per_day=0.0, isk_per_colony=0.0, volume_per_day=0.0)
+            feeders.append((mat_name, 1, s, SetupType.P2_TO_P3))
+            for p2_name, _ in p3_recipe.inputs:
+                p2_feeders = _trace_p1_needs(p2_name, "p2")
+                if p2_feeders is None:
+                    return None
+                feeders.extend(p2_feeders)
+            return feeders
+
+        return None
+
+    # Build the chain based on product tier
+    if tier == "p2":
+        recipe = game_data.get_recipe("p1_to_p2", product_name)
+        if not recipe:
+            return None
+        factory_opt = None
+        for opt in matrix:
+            if opt.setup == SetupType.P1_TO_P2 and opt.product == product_name:
+                factory_opt = opt
+                break
+        if not factory_opt:
+            return None
+        feeder_details = []
+        for p1_name, _ in recipe.inputs:
+            p1_feeders = _trace_p1_needs(p1_name, "p1")
+            if p1_feeders is None:
+                return None
+            feeder_details.extend(p1_feeders)
+        setup = SetupType.P1_TO_P2
+
+    elif tier == "p3":
+        recipe = game_data.get_recipe("p2_to_p3", product_name)
+        if not recipe:
+            return None
+        factory_opt = None
+        for opt in matrix:
+            if opt.setup == SetupType.P2_TO_P3 and opt.product == product_name:
+                factory_opt = opt
+                break
+        if not factory_opt:
+            return None
+        feeder_details = []
+        for p2_name, _ in recipe.inputs:
+            p2_feeders = _trace_p1_needs(p2_name, "p2")
+            if p2_feeders is None:
+                return None
+            feeder_details.extend(p2_feeders)
+        setup = SetupType.P2_TO_P3
+
+    elif tier == "p4":
+        recipe = game_data.get_recipe("p3_to_p4", product_name)
+        if not recipe:
+            return None
+        factory_opt = None
+        for opt in matrix:
+            if opt.setup == SetupType.P3_TO_P4 and opt.product == product_name:
+                factory_opt = opt
+                break
+        if not factory_opt:
+            return None
+        feeder_details = []
+        for inp_name, _ in recipe.inputs:
+            inp_tier = game_data.get_material_tier(inp_name)
+            inp_feeders = _trace_p1_needs(inp_name, inp_tier)
+            if inp_feeders is None:
+                return None
+            feeder_details.extend(inp_feeders)
+        setup = SetupType.P3_TO_P4
+    else:
+        return None
+
+    total_feeders = sum(count for _, count, _, _ in feeder_details)
+    total_colonies = 1 + total_feeders
+
+    # Calculate output value
+    output_mkt = market_data.get(product_name)
+    if not output_mkt:
+        return None
+    sell_price = output_mkt.get_sell_price(constraints.use_sell_orders)
+    # 1 factory at minimum output rate
+    output_per_day = recipe.output_per_hour * 24  # 1 factory
+    revenue = output_per_day * sell_price
+    chain_isk = revenue * (1 - constraints.tax_rate)
+
+    s = ScoredOption(option=factory_opt, isk_per_day=chain_isk, isk_per_colony=chain_isk/total_colonies,
+                     volume_per_day=output_per_day * game_data.materials[product_name].volume_m3)
+
+    return _ProductionUnit(
+        kind="chain",
+        factory_option=s,
+        feeder_colony_count=total_feeders,
+        total_colonies=total_colonies,
+        isk_per_day=chain_isk,
+        volume_per_day=s.volume_per_day,
+        isk_per_m3=chain_isk / s.volume_per_day if s.volume_per_day > 0 else 0.0,
+        product=product_name,
+        setup=setup,
+        feeder_details=feeder_details,
+    )
+
+
 def _allocate_self_sufficient(scored, constraints, market_data, game_data, matrix=None):
     """Allocate for self-sufficient mode with factory chains and stockpile filling."""
     result = OptimizationResult()
@@ -911,9 +1086,11 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
     for need in constraints.manufacturing_needs:
         if _colonies_used() >= max_colonies:
             break
+        allocated = False
+        # Try existing full-capacity units first
         matching = sorted(
             [u for u in units if u.product == need.product],
-            key=lambda u: u.isk_per_day, reverse=True,
+            key=lambda u: u.total_colonies,  # prefer smallest chain
         )
         for unit in matching:
             used = _try_allocate_unit(
@@ -922,12 +1099,25 @@ def _allocate_self_sufficient(scored, constraints, market_data, game_data, matri
                 constraints, feeder_p1_colonies,
             )
             if used > 0:
-                # Update the details to include manufacturing need info
-                for a in result.assignments:
-                    if a.category == "manufacturing" and a.product == unit.product and "(mfg need:" not in a.details:
-                        a.details = a.details.rstrip(")") if a.details.endswith(")") else a.details
-                        a.details += f" (mfg need: {need.quantity_per_week}/wk)"
+                allocated = True
                 break
+
+        # Fallback: build a minimal chain (1 factory per tier)
+        if not allocated:
+            minimal = _build_minimal_chain(need.product, game_data, constraints, scored, matrix, market_data)
+            if minimal:
+                used = _try_allocate_unit(
+                    minimal, result, "manufacturing", scored, matrix, game_data,
+                    planet_character_map, character_colony_counts,
+                    constraints, feeder_p1_colonies,
+                )
+                if used > 0:
+                    allocated = True
+
+        if allocated:
+            for a in result.assignments:
+                if a.category == "manufacturing" and a.product == need.product and "(mfg need:" not in a.details:
+                    a.details += f" (mfg need: {need.quantity_per_week}/wk)"
 
     # 4. Shipping pass: for each unit (sorted by ISK/colony), fill all available
     #    slots on that unit's planet before moving to the next unit.
