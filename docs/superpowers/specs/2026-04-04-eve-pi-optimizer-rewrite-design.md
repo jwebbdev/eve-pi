@@ -100,7 +100,7 @@ eve-pi/
 - **Extraction formula**: CCP official (decay_factor=0.012, noise_factor=0.8)
 
 ## Open Items
-1. Hauling budget as knapsack problem — chains compress volume, should be preferred when volume-constrained
+1. ~~Hauling budget as knapsack problem~~ (done — swap optimization pass replaces high-volume shipped colonies with multiple low-volume ones)
 2. ~~Opportunity cost on P2→P3 and P3→P4 chains~~ (done — flat per-colony lookup from standalone + P1→P2 units)
 3. Hybrid manufacturing — allow importing intermediates when full chain too large
 4. P2→P4 template in-game testing
