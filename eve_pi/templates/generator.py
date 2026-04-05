@@ -557,6 +557,13 @@ def _generate_factory_setup(
 
     if num_factories < 1:
         return None
+
+    # Round down to nearest multiple of LP count for even distribution
+    if num_lps > 1:
+        num_factories = (num_factories // num_lps) * num_lps
+        if num_factories < 1:
+            return None
+
     product_id = game_data.materials[product].type_id
 
     # Resolve input material IDs
