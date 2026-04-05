@@ -776,6 +776,29 @@ def _build_opportunity_cost_lookup(units: List[_ProductionUnit]) -> Dict[str, fl
     return best
 
 
+def _snapshot_allocation_state(result, planet_character_map, character_colony_counts,
+                                feeder_p1_colonies):
+    """Snapshot the mutable allocation state for rollback."""
+    return {
+        "assignments": list(result.assignments),
+        "planet_character_map": {k: set(v) for k, v in planet_character_map.items()},
+        "character_colony_counts": dict(character_colony_counts),
+        "feeder_p1_colonies": dict(feeder_p1_colonies),
+    }
+
+
+def _restore_allocation_state(snapshot, result, planet_character_map,
+                               character_colony_counts, feeder_p1_colonies):
+    """Restore allocation state from a snapshot."""
+    result.assignments[:] = snapshot["assignments"]
+    planet_character_map.clear()
+    planet_character_map.update({k: set(v) for k, v in snapshot["planet_character_map"].items()})
+    character_colony_counts.clear()
+    character_colony_counts.update(snapshot["character_colony_counts"])
+    feeder_p1_colonies.clear()
+    feeder_p1_colonies.update(snapshot["feeder_p1_colonies"])
+
+
 def _try_allocate_unit(unit, result, category, scored, matrix, game_data,
                        planet_character_map, character_colony_counts,
                        constraints, feeder_p1_colonies) -> int:

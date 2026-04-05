@@ -6,6 +6,7 @@ from eve_pi.market.esi import MarketData
 from eve_pi.optimizer.allocator import (
     optimize, OptimizationConstraints, OptimizationResult,
     _build_production_units, _build_opportunity_cost_lookup, _score_options,
+    _snapshot_allocation_state, _restore_allocation_state,
 )
 from eve_pi.optimizer.feasibility import build_feasibility_matrix
 
@@ -415,3 +416,39 @@ def test_p3_to_p4_chain_opportunity_cost():
         f"Low-price P4 chains should be eliminated by opportunity cost but got: "
         f"{[(a.product, a.isk_per_day) for a in p4_assignments]}"
     )
+
+
+def test_snapshot_restore_allocation_state():
+    """Snapshot and restore should preserve allocation state exactly."""
+    from eve_pi.optimizer.allocator import OptimizationResult, ColonyAssignment
+    from eve_pi.capacity.planet_capacity import SetupType
+
+    result = OptimizationResult()
+    result.assignments.append(ColonyAssignment(
+        planet_id=1, planet_type="Temperate", setup=SetupType.R0_TO_P1,
+        product="Industrial Fibers", num_factories=18, isk_per_day=4000000,
+        volume_per_day=1824, category="ship", character="Char1",
+    ))
+    planet_character_map = {1: {"Char1"}}
+    character_colony_counts = {"Char1": 1, "Char2": 0}
+    feeder_p1_colonies = {("Biomass", SetupType.R0_TO_P1): 2}
+
+    snapshot = _snapshot_allocation_state(result, planet_character_map,
+                                          character_colony_counts, feeder_p1_colonies)
+
+    # Mutate everything
+    result.assignments.clear()
+    planet_character_map[1].add("Char2")
+    planet_character_map[99] = {"Char2"}
+    character_colony_counts["Char1"] = 5
+    character_colony_counts["Char2"] = 3
+    feeder_p1_colonies[("Biomass", SetupType.R0_TO_P1)] = 10
+
+    _restore_allocation_state(snapshot, result, planet_character_map,
+                               character_colony_counts, feeder_p1_colonies)
+
+    assert len(result.assignments) == 1
+    assert result.assignments[0].product == "Industrial Fibers"
+    assert planet_character_map == {1: {"Char1"}}
+    assert character_colony_counts == {"Char1": 1, "Char2": 0}
+    assert feeder_p1_colonies == {("Biomass", SetupType.R0_TO_P1): 2}
