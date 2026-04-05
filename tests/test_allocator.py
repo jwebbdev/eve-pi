@@ -499,3 +499,25 @@ def test_snapshot_restore_allocation_state():
     assert planet_character_map == {1: {"Char1"}}
     assert character_colony_counts == {"Char1": 1, "Char2": 0}
     assert feeder_p1_colonies == {("Biomass", SetupType.R0_TO_P1): 2}
+
+
+def test_swap_pass_noop_unlimited_hauling():
+    """With unlimited hauling, swap pass should not run — results are identical."""
+    gd = GameData.load()
+    system = _make_test_system(gd)
+    market = _make_fake_market()
+    characters = [Character(name=f"Char{i}", ccu_level=5, max_planets=6) for i in range(6)]
+
+    # Unlimited hauling: trips=0, cargo=0
+    constraints = OptimizationConstraints(
+        system=system, characters=characters, mode="self_sufficient",
+        cycle_days=4.0, hauling_trips_per_week=0, cargo_capacity_m3=0, tax_rate=0.05,
+    )
+    result = optimize(constraints, market, gd)
+
+    # With unlimited hauling, no colonies should be stockpiled — everything ships
+    stockpiled = [a for a in result.assignments if a.category == "stockpile"]
+    assert len(stockpiled) == 0, (
+        f"Unlimited hauling should have no stockpiled colonies but got: "
+        f"{[(a.product, a.setup.value) for a in stockpiled]}"
+    )
