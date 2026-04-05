@@ -238,6 +238,9 @@
         // Set LP dropdown to smart default for this setup type
         const defaultLp = defaultLpCounts[setup] || 4;
         document.getElementById('templateLpCount').value = defaultLp;
+        // Hide LP dropdown for extraction setups (LP count is fixed)
+        const lpDiv = document.getElementById('templateLpCount').parentElement;
+        lpDiv.style.display = (setup === 'r0_to_p1' || setup === 'r0_to_p2') ? 'none' : '';
         _fetchTemplate(setup, planetType, product, planetId, character, defaultLp);
     }
 
@@ -260,11 +263,16 @@
                     return;
                 }
                 const t = data.template;
-                // Count factories and LPs from template
-                const numPins = t.P.length;
-                const numLPs = t.P.filter(p => p.S === null).length;
-                const numFac = numPins - numLPs;
-                document.getElementById('templateInfo').textContent = `${numFac} factories, ${numLPs} LPs`;
+                // Build structure summary from API counts
+                const c = data.counts || {};
+                const parts = [];
+                if (c.extractor) parts.push(`${c.extractor} ECU`);
+                if (c.basic_factory) parts.push(`${c.basic_factory} Basic`);
+                if (c.advanced_factory) parts.push(`${c.advanced_factory} Adv`);
+                if (c.hightech_factory) parts.push(`${c.hightech_factory} HT`);
+                if (c.launchpad) parts.push(`${c.launchpad} LP`);
+                if (c.storage) parts.push(`${c.storage} Storage`);
+                document.getElementById('templateInfo').textContent = parts.join(', ');
                 document.getElementById('templateTitle').textContent = `${product} on ${planetType} (${setup})`;
                 document.getElementById('templateJson').value = JSON.stringify(t, null, 2);
                 document.getElementById('templateModal').style.display = 'block';
