@@ -221,7 +221,8 @@ async def run_optimization(request: Request):
                    feed_by_factory=feed_by_factory,
                    planet_radii=planet_radii,
                    char_ccu=char_ccu,
-                   form_values=form_values)
+                   form_values=form_values,
+                   game_data=game_data)
 
 
 @app.get("/template-converter", response_class=HTMLResponse)

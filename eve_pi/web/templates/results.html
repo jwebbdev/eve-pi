@@ -59,7 +59,12 @@
                 <td>{{ a.planet_type }}</td>
                 <td>{{ a.character }}</td>
                 <td class="right isk-value">{{ "{:,.0f}".format(a.isk_per_day) }}</td>
+                {% set mat = game_data.materials.get(a.product) %}
+                {% if mat and mat.volume_m3 > 0 %}
+                <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day * 7 / mat.volume_m3) }}</td>
+                {% else %}
                 <td class="right volume-value">{{ "{:,.0f}".format(a.volume_per_day * 7) }}</td>
+                {% endif %}
                 <td><button class="btn btn-sm" onclick="getTemplate('{{ a.setup.value }}', '{{ a.planet_type }}', '{{ a.product }}', {{ a.planet_id }}, '{{ a.character }}')">Template</button></td>
             </tr>
             {% set feeders = feed_by_factory.get(a.product, []) %}
