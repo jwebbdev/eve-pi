@@ -24,8 +24,11 @@ from eve_pi.optimizer.allocator import (
 from eve_pi.templates.converter import convert_template
 from eve_pi.templates.generator import generate_template as gen_template
 import html
+import logging
 import re
 from datetime import datetime
+
+logger = logging.getLogger("eve_pi.web")
 
 app = FastAPI(title="EVE PI Optimizer")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
@@ -290,9 +293,20 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
     if template:
         return JSONResponse({"template": template})
 
-    # Fallback to reference templates
+    # Fallback to reference templates — log this since it shouldn't happen normally
+    logger.warning(
+        "Template generator returned None — falling back to reference template. "
+        "setup=%s, planet=%s, product=%s, radius=%.0f, ccu=%d",
+        setup, planet_type, product, radius_km, ccu_level,
+    )
+
     ref = _find_reference_template(product, setup)
     if not ref:
+        logger.error(
+            "Fallback also failed — no reference template. "
+            "setup=%s, planet=%s, product=%s",
+            setup, planet_type, product,
+        )
         return JSONResponse(
             {"error": f"No template available for {product} ({setup}) on {planet_type} "
                       f"(CCU {ccu_level}, {radius_km:.0f}km)"},
@@ -300,8 +314,6 @@ async def generate_template_route(setup: str, planet_type: str, product: str, re
         )
 
     converted = convert_template(ref, to_planet_type=planet_type, game_data=game_data)
-
-    # Ensure Diam is float (game requires it)
     if "Diam" in converted:
         converted["Diam"] = float(converted["Diam"])
 
