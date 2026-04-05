@@ -216,8 +216,9 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
         {"D": 2, "Lv": 0, "S": 1},  # LP <-> Storage
     ]
 
-    # Place basic factories in hex grid with tree linking
-    tree = _hex_grid_positions(cx, cy, step, num_basics)
+    # Place basic factories in hex grid, offset from LP/Storage
+    grid_cy = cy + step * 2
+    tree = _hex_grid_positions(cx, grid_cy, step, num_basics)
     factory_start = len(pins) + 1  # 1-indexed
 
     for i, (la, lo, parent_idx) in enumerate(tree):
@@ -615,7 +616,7 @@ def _generate_p2_to_p4(planet_type_name: str, product: str,
     total_adv = total_adv_per_ht * n_ht
     total_factories = n_ht + total_adv
     grid_cx = cx
-    grid_cy = cy + step * 2  # offset grid below LP cluster
+    grid_cy = cy + step * (num_lps + 2)  # offset grid away from LP cluster
     all_positions = _hex_grid_positions(grid_cx, grid_cy, step, total_factories)
 
     # Assign: first n_ht positions are HT factories
@@ -825,9 +826,10 @@ def _generate_factory_setup(
                      "S": None, "T": pt.structures["launchpad"]})
         links.append({"D": len(pins), "Lv": 0, "S": 1})  # link to LP1
 
-    # Place factories in a tree radiating from LP cluster
+    # Place factories in a tree, offset from LP cluster to avoid overlap
     factory_start = len(pins) + 1  # 1-indexed pin number of first factory
-    tree = _hex_grid_positions(cx, cy, step, num_factories)
+    grid_cy = cy + step * (num_lps + 1)  # offset based on LP count
+    tree = _hex_grid_positions(cx, grid_cy, step, num_factories)
 
     for i, (la, lo, parent_idx) in enumerate(tree):
         pins.append({"H": 0, "La": float(la), "Lo": float(lo),
