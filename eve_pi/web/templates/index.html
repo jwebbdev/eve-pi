@@ -162,25 +162,21 @@
                 Load System Products
             </button>
         </div>
+        <div class="dynamic-item" style="border:none; padding:0; margin:0 0 4px 0;">
+            <div><label>Product</label></div>
+            <div class="narrow"><label>Qty/Week</label></div>
+            <div class="action"></div>
+        </div>
         <div id="manufacturing" class="dynamic-section">
             {% if form_values and form_values.manufacturing_needs %}
                 {% for need in form_values.manufacturing_needs %}
                 <div class="dynamic-item" data-type="manufacturing">
                     <div>
-                        <label>Product</label>
-                        <select name="mfg_product">
-                            <option value="">-- Select Product --</option>
-                            {% for tier in ['p1', 'p2', 'p3', 'p4'] %}
-                            <optgroup label="{{ tier|upper }}">
-                                {% for prod in products_by_tier[tier] %}
-                                <option value="{{ prod }}" {{ 'selected' if need.product == prod }}>{{ prod }}</option>
-                                {% endfor %}
-                            </optgroup>
-                            {% endfor %}
+                        <select name="mfg_product" disabled>
+                            <option value="{{ need.product }}" selected>{{ need.product }}</option>
                         </select>
                     </div>
                     <div class="narrow">
-                        <label>Qty/Week</label>
                         <input type="number" name="mfg_quantity" min="1" value="{{ need.quantity_per_week }}">
                     </div>
                     <div class="action">
@@ -209,7 +205,7 @@
 {% block scripts %}
 <script>
     // Product options HTML for manufacturing dropdowns
-    const productOptionsHTML = `
+    let productOptionsHTML = `
         <option value="">-- Select Product --</option>
         {% for tier in ['p1', 'p2', 'p3', 'p4'] %}
         <optgroup label="{{ tier|upper }}">
@@ -250,19 +246,21 @@
     }
 
     function addManufacturing() {
+        if (!systemProducts) {
+            alert('Load system products first (enter a system name and click "Load System Products")');
+            return;
+        }
         const container = document.getElementById('manufacturing');
         const div = document.createElement('div');
         div.className = 'dynamic-item';
         div.setAttribute('data-type', 'manufacturing');
         div.innerHTML = `
             <div>
-                <label>Product</label>
                 <select name="mfg_product">
                     ${productOptionsHTML}
                 </select>
             </div>
             <div class="narrow">
-                <label>Qty/Week</label>
                 <input type="number" name="mfg_quantity" min="1" value="100">
             </div>
             <div class="action">
@@ -383,8 +381,8 @@
                     `value="${need.product}" selected`
                 );
                 div.innerHTML = `
-                    <div><label>Product</label><select name="mfg_product">${selectHtml}</select></div>
-                    <div class="narrow"><label>Qty/Week</label><input type="number" name="mfg_quantity" min="1" value="${need.quantity_per_week}"></div>
+                    <div><select name="mfg_product" ${systemProducts ? '' : 'disabled'}>${selectHtml}</select></div>
+                    <div class="narrow"><input type="number" name="mfg_quantity" min="1" value="${need.quantity_per_week}"></div>
                     <div class="action"><button type="button" class="btn btn-danger btn-sm" onclick="removeItem(this)">X</button></div>
                 `;
                 container.appendChild(div);
@@ -474,10 +472,11 @@
                     }
                 }
                 productOptionsHTML = html;
-                // Update existing dropdowns
+                // Update and enable existing dropdowns
                 document.querySelectorAll('#manufacturing select[name="mfg_product"]').forEach(sel => {
                     const current = sel.value;
                     sel.innerHTML = html;
+                    sel.disabled = false;
                     if (current) sel.value = current;
                 });
                 const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
@@ -485,6 +484,14 @@
             })
             .catch(err => alert('Failed to load system products: ' + err));
     }
+
+    // Reset system products when system name changes
+    document.getElementById('system').addEventListener('change', function() {
+        systemProducts = null;
+        document.querySelectorAll('#manufacturing select[name="mfg_product"]').forEach(sel => {
+            sel.disabled = true;
+        });
+    });
 
     // Initialize dropdown on page load
     refreshConfigDropdown();
