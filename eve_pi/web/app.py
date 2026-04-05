@@ -450,7 +450,9 @@ if __name__ == "__main__":
     parser.add_argument("--reload", action="store_true", help="Auto-reload on file changes")
     args = parser.parse_args()
     if args.reload:
+        import eve_pi
+        pkg_dir = str(Path(eve_pi.__file__).parent)
         uvicorn.run("eve_pi.web.app:app", host=args.host, port=args.port, reload=True,
-                     reload_dirs=["eve_pi"])
+                     reload_dirs=[pkg_dir])
     else:
         uvicorn.run(app, host=args.host, port=args.port)
