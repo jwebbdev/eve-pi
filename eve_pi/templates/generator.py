@@ -91,8 +91,16 @@ def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
             dist = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
             cells.append((round(float(la), 5), round(float(lo), 5), row, col, dist))
 
-    # Sort by distance from center (spiral outward)
-    cells.sort(key=lambda c: c[4])
+    # Sort by ring (distance from center), then by angle for consistent fill order
+    import math as _math
+    def _sort_key(cell):
+        la, lo, row, col, dist = cell
+        # Round distance to group into rings (avoid float precision issues)
+        ring = round(dist / step) if step > 0 else 0
+        # Within a ring, sort by angle for clockwise fill
+        angle = _math.atan2(lo - cy, la - cx)
+        return (ring, angle)
+    cells.sort(key=_sort_key)
     return [(la, lo, row, col) for la, lo, row, col, _ in cells]
 
 
