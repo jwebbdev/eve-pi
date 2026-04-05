@@ -66,20 +66,108 @@ def _angular_step(radius_km: float) -> float:
     return max(step, 0.005)
 
 
-def _place_factories_ring(cx: float, cy: float, step: float,
-                          count: int, direction: float = 1.0) -> List[Tuple[float, float]]:
-    """Place *count* factories in rows of 2, extending in *direction* from center.
+def _hex_grid_positions(cx: float, cy: float, step: float,
+                        count: int) -> List[Tuple[float, float, int]]:
+    """Place structures in a honeycomb pattern radiating from center.
 
-    Returns list of (la, lo) tuples.
+    Returns list of (la, lo, parent_index) where parent_index is the
+    0-based index in this list of the nearest neighbor toward center,
+    or -1 if directly adjacent to center (hub).
+
+    Each ring has 6 more positions than the previous:
+    - Ring 1: 6 positions (directly around hub)
+    - Ring 2: 12 positions
+    - Ring 3: 18 positions
+    Total through ring 3: 36 positions (more than enough for any PI setup).
     """
-    positions = []
-    for i in range(count):
-        row = i // 2
-        col = i % 2
-        la = round(cx + (col - 0.5) * step, 5)
-        lo = round(cy + direction * step * (1 + row), 5)
-        positions.append((la, lo))
-    return positions
+    import math
+
+    # Hex grid: offset coordinates converted to axial
+    # step_la = step (vertical), step_lo = step (horizontal)
+    # In a hex grid, alternating rows are offset by half a step
+    half = step * 0.5
+    row_height = step * 0.866  # sqrt(3)/2
+
+    # Generate positions in concentric hex rings around center
+    # Ring N has 6*N positions
+    all_positions = []  # (la, lo, distance_from_center)
+
+    # Ring 1: 6 immediate neighbors
+    ring1 = [
+        (cx + step, cy),              # right
+        (cx - step, cy),              # left
+        (cx + half, cy + row_height), # upper-right
+        (cx - half, cy + row_height), # upper-left
+        (cx + half, cy - row_height), # lower-right
+        (cx - half, cy - row_height), # lower-left
+    ]
+
+    # Ring 2: 12 positions
+    ring2 = [
+        (cx + step * 2, cy),                        # far right
+        (cx - step * 2, cy),                        # far left
+        (cx, cy + row_height * 2),                  # top
+        (cx, cy - row_height * 2),                  # bottom
+        (cx + step * 1.5, cy + row_height),         # right-up
+        (cx - step * 1.5, cy + row_height),         # left-up
+        (cx + step * 1.5, cy - row_height),         # right-down
+        (cx - step * 1.5, cy - row_height),         # left-down
+        (cx + step, cy + row_height * 2),           # upper-right-far
+        (cx - step, cy + row_height * 2),           # upper-left-far
+        (cx + step, cy - row_height * 2),           # lower-right-far
+        (cx - step, cy - row_height * 2),           # lower-left-far
+    ]
+
+    # Ring 3: 18 more positions
+    ring3 = [
+        (cx + step * 3, cy),
+        (cx - step * 3, cy),
+        (cx + step * 2.5, cy + row_height),
+        (cx - step * 2.5, cy + row_height),
+        (cx + step * 2.5, cy - row_height),
+        (cx - step * 2.5, cy - row_height),
+        (cx + step * 2, cy + row_height * 2),
+        (cx - step * 2, cy + row_height * 2),
+        (cx + step * 2, cy - row_height * 2),
+        (cx - step * 2, cy - row_height * 2),
+        (cx + half, cy + row_height * 3),
+        (cx - half, cy + row_height * 3),
+        (cx + half, cy - row_height * 3),
+        (cx - half, cy - row_height * 3),
+        (cx + step * 1.5, cy + row_height * 3),
+        (cx - step * 1.5, cy + row_height * 3),
+        (cx + step * 1.5, cy - row_height * 3),
+        (cx - step * 1.5, cy - row_height * 3),
+    ]
+
+    all_slots = ring1 + ring2 + ring3
+
+    # For each position, find its nearest neighbor that's closer to center (parent)
+    results = []
+    for i in range(min(count, len(all_slots))):
+        la, lo = all_slots[i]
+        la = round(float(la), 5)
+        lo = round(float(lo), 5)
+
+        dist_to_center = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+
+        # Find parent: nearest already-placed position that's closer to center
+        parent_idx = -1  # default: link to hub
+        best_dist = float('inf')
+
+        for j in range(len(results)):
+            pla, plo, _ = results[j]
+            p_dist_to_center = math.sqrt((pla - cx) ** 2 + (plo - cy) ** 2)
+            if p_dist_to_center >= dist_to_center:
+                continue  # parent must be closer to center
+            link_dist = math.sqrt((la - pla) ** 2 + (lo - plo) ** 2)
+            if link_dist < best_dist:
+                best_dist = link_dist
+                parent_idx = j
+
+        results.append((la, lo, parent_idx))
+
+    return results
 
 
 def _parent_pin(index: int, pin_a: int = 1, pin_b: int = 2) -> int:
@@ -126,14 +214,19 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
         {"D": 2, "Lv": 0, "S": 1},  # LP <-> Storage
     ]
 
-    # Place basic factories
-    factory_positions = _place_factories_ring(cx, cy, step, num_basics, direction=1.0)
+    # Place basic factories in hex grid with tree linking
+    tree = _hex_grid_positions(cx, cy, step, num_basics)
     factory_start = len(pins) + 1  # 1-indexed
-    for i, (la, lo) in enumerate(factory_positions):
+
+    for i, (la, lo, parent_idx) in enumerate(tree):
         pins.append({"H": 0, "La": float(la), "Lo": float(lo),
                      "S": p1_id, "T": pt.structures["basic_factory"]})
-        parent = _parent_pin(i)
-        links.append({"D": len(pins), "Lv": 0, "S": parent})
+        # Link: factories chain to each other, ring-1 factories link to LP or Storage
+        if parent_idx == -1:
+            link_to = _parent_pin(i)  # alternate LP(1) / Storage(2)
+        else:
+            link_to = factory_start + parent_idx
+        links.append({"D": len(pins), "Lv": 0, "S": link_to})
 
     # ECU
     ecu_pin = len(pins) + 1
@@ -142,29 +235,58 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
                  "S": r0_id, "T": pt.structures["extractor"]})
     links.append({"D": ecu_pin, "Lv": 0, "S": 2})  # ECU -> Storage
 
+    # Build path from each factory back to hub (following parent chain)
+    def _path_to_hub(factory_index: int) -> List[int]:
+        path = [factory_start + factory_index]
+        idx = factory_index
+        while True:
+            parent_idx = tree[idx][2]
+            if parent_idx == -1:
+                # This factory links to LP or Storage
+                hub_pin = _parent_pin(idx)
+                path.append(hub_pin)
+                break
+            else:
+                path.append(factory_start + parent_idx)
+                idx = parent_idx
+        return path
+
     # Routes
     routes: List[dict] = []
 
-    # R0: Storage -> each Basic Factory
+    # R0: Storage -> each Basic Factory (R0 can't route through factories!)
+    # For R0, every factory must have a direct link to LP or Storage
+    # Since tree factories may chain through other factories, R0 routes need
+    # to go Storage -> LP -> factory (for ring-1 factories linked to LP)
+    # or Storage -> factory (for ring-1 factories linked to Storage)
+    # For deeper factories, R0 CAN route through other basic factories
+    # because EVE allows R0 to pass through — wait, no it can't!
+    # R0 routing through basic factories fails. So for extraction setups,
+    # ALL factories must link directly to LP or Storage (no chaining).
+    # Re-link: override tree parents so all connect to LP or Storage
+    links_override = []
+    for i in range(len(links)):
+        if links[i]["D"] >= factory_start and links[i]["D"] <= factory_start + num_basics - 1:
+            # This is a factory link — force it to LP or Storage
+            factory_idx = links[i]["D"] - factory_start
+            links[i]["S"] = _parent_pin(factory_idx)
+
     for i in range(num_basics):
         pin = factory_start + i
         parent = _parent_pin(i)
-        # Route must follow links: Storage(2) -> parent -> factory
         if parent == 1:
-            path = [2, 1, pin]
+            routes.append({"P": [2, 1, pin], "Q": r0_qty, "T": r0_id})
         else:
-            path = [2, pin]
-        routes.append({"P": path, "Q": r0_qty, "T": r0_id})
+            routes.append({"P": [2, pin], "Q": r0_qty, "T": r0_id})
 
     # P1: each Basic Factory -> LP
     for i in range(num_basics):
         pin = factory_start + i
         parent = _parent_pin(i)
         if parent == 1:
-            path = [pin, 1]
+            routes.append({"P": [pin, 1], "Q": recipe.output_per_cycle, "T": p1_id})
         else:
-            path = [pin, 2, 1]
-        routes.append({"P": path, "Q": recipe.output_per_cycle, "T": p1_id})
+            routes.append({"P": [pin, 2, 1], "Q": recipe.output_per_cycle, "T": p1_id})
 
     # ECU program route: ECU -> Storage
     routes.append({"P": [ecu_pin, 2], "Q": r0_qty, "T": r0_id})
@@ -409,60 +531,57 @@ def _generate_factory_setup(
     step = _angular_step(radius_km)
     cx, cy = 1.5, 3.0
 
-    # Determine number of launchpads: add second LP when factories > 12
-    num_lps = 2 if num_factories > 12 else 1
-
-    # Build hub pins
+    # Build hub pin: LP at center
     pins: List[dict] = []
     links: List[dict] = []
 
-    # LP 1
+    # LP 1 (pin 1)
     pins.append({"H": 0, "La": float(round(cx, 5)), "Lo": float(round(cy, 5)),
                  "S": None, "T": pt.structures["launchpad"]})
 
-    if num_lps == 2:
-        # LP 2
-        pins.append({"H": 0, "La": float(round(cx + step, 5)), "Lo": float(round(cy, 5)),
-                     "S": None, "T": pt.structures["launchpad"]})
-        links.append({"D": 2, "Lv": 0, "S": 1})  # LP1 <-> LP2
+    # Place factories in a tree radiating from LP
+    factory_start = len(pins) + 1  # 1-indexed pin number of first factory
+    tree = _hex_grid_positions(cx, cy, step, num_factories)
 
-    # Place factories
-    factory_start = len(pins) + 1  # 1-indexed
-    factory_positions = _place_factories_ring(cx, cy, step, num_factories, direction=1.0)
-    for i, (la, lo) in enumerate(factory_positions):
+    for i, (la, lo, parent_idx) in enumerate(tree):
         pins.append({"H": 0, "La": float(la), "Lo": float(lo),
                      "S": product_id, "T": pt.structures[factory_key]})
-        if num_lps == 2:
-            # Split: first half -> LP1, second half -> LP2
-            parent = 1 if i < num_factories // 2 else 2
+        # Link to parent: -1 means hub (pin 1), otherwise link to parent factory
+        if parent_idx == -1:
+            link_to = 1  # LP
         else:
-            parent = 1
-        links.append({"D": len(pins), "Lv": 0, "S": parent})
+            link_to = factory_start + parent_idx  # parent factory pin (1-indexed)
+        links.append({"D": len(pins), "Lv": 0, "S": link_to})
+
+    # Build path from each factory back to LP (following parent chain)
+    def _path_to_lp(factory_index: int) -> List[int]:
+        """Build route path from a factory back to LP 1, following the tree."""
+        path = [factory_start + factory_index]
+        idx = factory_index
+        while True:
+            parent_idx = tree[idx][2]
+            if parent_idx == -1:
+                path.append(1)  # LP
+                break
+            else:
+                path.append(factory_start + parent_idx)
+                idx = parent_idx
+        return path
 
     # Routes
     routes: List[dict] = []
 
     for i in range(num_factories):
         factory_pin = factory_start + i
-        if num_lps == 2:
-            parent = 1 if i < num_factories // 2 else 2
-        else:
-            parent = 1
+        path_to_lp = _path_to_lp(i)
+        path_from_lp = list(reversed(path_to_lp))
 
         # Input routes: LP -> factory (one per input material)
         for mat_name, mat_id, qty in input_info:
-            if parent == 1:
-                path = [1, factory_pin]
-            else:
-                path = [1, 2, factory_pin] if num_lps == 2 else [1, factory_pin]
-            routes.append({"P": path, "Q": qty, "T": mat_id})
+            routes.append({"P": path_from_lp, "Q": qty, "T": mat_id})
 
-        # Output route: factory -> LP (always route to LP 1 for pickup)
-        if parent == 1:
-            path = [factory_pin, 1]
-        else:
-            path = [factory_pin, 2, 1] if num_lps == 2 else [factory_pin, 1]
-        routes.append({"P": path, "Q": recipe.output_per_cycle, "T": product_id})
+        # Output route: factory -> LP
+        routes.append({"P": path_to_lp, "Q": recipe.output_per_cycle, "T": product_id})
 
     return {
         "CmdCtrLv": ccu_level,
