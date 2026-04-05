@@ -193,3 +193,26 @@ class ESIClient:
         except Exception as e:
             print(f"Failed to download planet radius data: {e}")
             return {}
+
+    def fetch_route(self, origin_id: int, destination_id: int) -> Optional[int]:
+        """Get jump count between two systems via ESI route API.
+
+        Returns number of jumps (length of route - 1), or None on failure.
+        Cached for 7 days (topology rarely changes).
+        """
+        cache_key = f"route_{origin_id}_{destination_id}"
+        sde_cache = FileCache(self.cache.cache_dir, ttl_seconds=7 * 24 * 3600)
+        cached = sde_cache.load(cache_key)
+        if cached is not None:
+            return cached
+
+        url = (
+            f"https://esi.evetech.net/latest/route/{origin_id}/{destination_id}/"
+            f"?datasource=tranquility"
+        )
+        result = self._fetch_json(url)
+        if result is not None and isinstance(result, list):
+            jumps = len(result) - 1  # Route includes origin
+            sde_cache.save(cache_key, jumps)
+            return jumps
+        return None

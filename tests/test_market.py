@@ -50,3 +50,18 @@ def test_market_data_insufficient_volume():
     )
     avg_price, total_cost, sufficient = md.get_purchase_cost(1000)
     assert not sufficient
+
+
+def test_fetch_route_returns_jump_count():
+    """Test that fetch_route returns an integer jump count (requires network)."""
+    from eve_pi.market.esi import ESIClient
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        esi = ESIClient(cache_dir=Path(tmpdir))
+        # Jita (30000142) to Amarr (30002187) — well-known route
+        jumps = esi.fetch_route(30000142, 30002187)
+        assert jumps is not None
+        assert isinstance(jumps, int)
+        assert jumps > 0  # Jita to Amarr is ~30+ jumps
