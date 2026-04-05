@@ -165,6 +165,9 @@
         <div id="mfgPlaceholder" style="color:#666; padding:10px 0; font-size:12px;">
             Enter a system name above and click "Load System Products" to see what can be manufactured.
         </div>
+        <div id="mfgLoading" style="display:none; color:#4fc3f7; padding:10px 0; font-size:12px;">
+            Loading system products...
+        </div>
         <div id="mfgContent" style="display:none;">
             <div class="dynamic-item" style="border:none; padding:0; margin:0 0 4px 0;">
                 <div><label>Product</label></div>
@@ -456,11 +459,18 @@
             if (!silent) alert('Enter a system name first');
             return;
         }
+        // Show loading state
+        document.getElementById('mfgPlaceholder').style.display = 'none';
+        document.getElementById('mfgLoading').style.display = 'block';
+        document.getElementById('mfgContent').style.display = 'none';
+
         fetch(`/api/system-products/${encodeURIComponent(system)}`)
             .then(r => r.json())
             .then(data => {
+                document.getElementById('mfgLoading').style.display = 'none';
                 if (data.error) {
-                    alert(data.error);
+                    document.getElementById('mfgPlaceholder').style.display = 'block';
+                    if (!silent) alert(data.error);
                     return;
                 }
                 systemProducts = data.products;
@@ -486,12 +496,12 @@
                     sel.innerHTML = html;
                     if (current) sel.value = current;
                 });
-                if (!silent) {
-                    const total = Object.values(systemProducts).reduce((s, a) => s + a.length, 0);
-                    alert(`Loaded ${total} producible items for ${system}`);
-                }
             })
-            .catch(err => alert('Failed to load system products: ' + err));
+            .catch(err => {
+                document.getElementById('mfgLoading').style.display = 'none';
+                document.getElementById('mfgPlaceholder').style.display = 'block';
+                if (!silent) alert('Failed to load system products: ' + err);
+            });
     }
 
     // Reset system products when system name changes
