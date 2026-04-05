@@ -41,50 +41,24 @@ def link_costs(distance_km: float) -> Tuple[float, float]:
     return power, cpu
 
 
-def calculate_lp_count(num_factories: int, setup: SetupType, game_data: GameData,
-                       cycle_days: float = 4.0, product_name: str = None) -> int:
-    """Calculate how many launchpads are needed based on factory throughput and cycle length.
+def calculate_lp_count(setup: SetupType, num_input_types: int = 2) -> int:
+    """Calculate how many launchpads are needed based on the number of input types.
 
-    LP capacity is 10,000 m³. Factory planets need to hold cycle_days worth of inputs.
+    For factory planets, LPs serve as delivery/pickup points. Each LP can handle
+    multiple input types. Rule of thumb: 1 LP per 2 input types, plus 1 for output,
+    minimum 1.
+
+    For extraction planets, 1 LP is sufficient.
     """
     if setup in (SetupType.R0_TO_P1, SetupType.R0_TO_P2):
-        return 1  # Extraction planets just need 1 LP for export
-
-    # Determine input volume per hour for the factory setup
-    tier_key = {
-        SetupType.P1_TO_P2: "p1_to_p2",
-        SetupType.P2_TO_P3: "p2_to_p3",
-        SetupType.P3_TO_P4: "p3_to_p4",
-    }.get(setup)
-
-    if not tier_key:
         return 1
 
-    # Get a representative recipe for volume calculation
-    recipes = game_data.recipes.get(tier_key, {})
-    if product_name and product_name in recipes:
-        recipe = recipes[product_name]
-    elif recipes:
-        recipe = next(iter(recipes.values()))
-    else:
-        return 1
-
-    # Calculate total input volume per hour
-    input_vol_per_hour = 0.0
-    for mat_name, qty_per_cycle in recipe.inputs:
-        mat = game_data.materials.get(mat_name)
-        vol = mat.volume_m3 if mat else 0.38
-        qty_per_hour = qty_per_cycle * (3600 / recipe.cycle_seconds) * num_factories
-        input_vol_per_hour += qty_per_hour * vol
-
-    # Total volume needed for cycle_days
-    total_vol = input_vol_per_hour * 24 * cycle_days
-
-    # Each LP holds 10,000 m³
+    # Factory planets: 1 LP base, add more for higher input counts
+    # P1->P2: 2 inputs -> 1 LP
+    # P2->P3: 2-3 inputs -> 1-2 LPs
+    # P3->P4: 3 inputs -> 2 LPs
     import math
-    lp_count = max(1, math.ceil(total_vol / 10000))
-
-    return lp_count
+    return max(1, math.ceil(num_input_types / 2))
 
 
 def can_fit(
@@ -147,42 +121,49 @@ def can_fit(
 def _fit_factory(available_cpu, available_power, link_power_per_factory,
                  link_cpu_per_factory, setup, game_data, details,
                  product_name=None, cycle_days=4.0):
-    """Iteratively find max factories, accounting for LP count growing with throughput."""
+    """Find max factories that fit after reserving LP budget."""
     factory_key = FACTORY_TYPE[setup]
     factory = game_data.facilities[factory_key]
     lp = game_data.facilities["launchpad"]
 
+    # Determine LP count from recipe input count
+    num_inputs = 2  # default
+    tier_key = {
+        SetupType.P1_TO_P2: "p1_to_p2",
+        SetupType.P2_TO_P3: "p2_to_p3",
+        SetupType.P3_TO_P4: "p3_to_p4",
+    }.get(setup)
+    if tier_key and product_name:
+        recipe = game_data.get_recipe(tier_key, product_name)
+        if recipe:
+            num_inputs = len(recipe.inputs)
+    lp_count = calculate_lp_count(setup, num_inputs)
+
+    # Reserve LP budget (each LP has a link too)
+    lp_total_cpu = lp.cpu_tf * lp_count + link_cpu_per_factory * lp_count
+    lp_total_power = lp.power_mw * lp_count + link_power_per_factory * lp_count
+
+    remaining_cpu = available_cpu - lp_total_cpu
+    remaining_power = available_power - lp_total_power
+
+    if remaining_cpu <= 0 or remaining_power <= 0:
+        details["factory_type"] = factory_key
+        details["max_factories"] = 0
+        details["launchpad_count"] = lp_count
+        return False, 0, details
+
     cost_per_factory_cpu = factory.cpu_tf + link_cpu_per_factory
     cost_per_factory_power = factory.power_mw + link_power_per_factory
-
-    # Try increasing factory counts until budget exceeded
-    best_factories = 0
-    best_lp_count = 1
-
-    for n_factories in range(1, 50):
-        lp_count = calculate_lp_count(n_factories, setup, game_data, cycle_days, product_name)
-        # Each LP also has a link
-        lp_total_cpu = lp.cpu_tf * lp_count + link_cpu_per_factory * lp_count
-        lp_total_power = lp.power_mw * lp_count + link_power_per_factory * lp_count
-
-        factory_total_cpu = cost_per_factory_cpu * n_factories
-        factory_total_power = cost_per_factory_power * n_factories
-
-        total_cpu = lp_total_cpu + factory_total_cpu
-        total_power = lp_total_power + factory_total_power
-
-        if total_cpu <= available_cpu and total_power <= available_power:
-            best_factories = n_factories
-            best_lp_count = lp_count
-        else:
-            break
+    max_by_cpu = int(remaining_cpu / cost_per_factory_cpu) if cost_per_factory_cpu > 0 else 0
+    max_by_power = int(remaining_power / cost_per_factory_power) if cost_per_factory_power > 0 else 0
+    max_factories = min(max_by_cpu, max_by_power)
 
     details["factory_type"] = factory_key
-    details["max_factories"] = best_factories
-    details["launchpad_count"] = best_lp_count
+    details["max_factories"] = max_factories
+    details["launchpad_count"] = lp_count
     details["cost_per_factory_cpu"] = cost_per_factory_cpu
     details["cost_per_factory_power"] = cost_per_factory_power
-    return best_factories > 0, best_factories, details
+    return max_factories > 0, max_factories, details
 
 
 def _fit_extraction(remaining_cpu, remaining_power, link_power_per_factory,
