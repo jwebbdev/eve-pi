@@ -70,104 +70,78 @@ def _angular_step(radius_km: float) -> float:
     return max(step, 0.005)
 
 
-def _hex_grid_positions(cx: float, cy: float, step: float,
-                        count: int) -> List[Tuple[float, float, int]]:
-    """Place structures in a honeycomb pattern radiating from center.
+def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
+              ) -> List[Tuple[float, float, int, int]]:
+    """Generate a hex grid of cell positions centered on (cx, cy).
 
-    Returns list of (la, lo, parent_index) where parent_index is the
-    0-based index in this list of the nearest neighbor toward center,
-    or -1 if directly adjacent to center (hub).
+    Returns list of (la, lo, row, col) sorted by distance from center.
+    Rows alternate offset by half a step (hex pattern).
+    """
+    import math
+    half_grid = grid_size // 2
+    cells = []
 
-    Each ring has 6 more positions than the previous:
-    - Ring 1: 6 positions (directly around hub)
-    - Ring 2: 12 positions
-    - Ring 3: 18 positions
-    Total through ring 3: 36 positions (more than enough for any PI setup).
+    for row in range(-half_grid, half_grid + 1):
+        for col in range(-half_grid, half_grid + 1):
+            la = cx + col * step
+            if row % 2 != 0:
+                la += step * 0.5  # offset odd rows
+            lo = cy + row * step
+            dist = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+            cells.append((round(float(la), 5), round(float(lo), 5), row, col, dist))
+
+    # Sort by distance from center (spiral outward)
+    cells.sort(key=lambda c: c[4])
+    return [(la, lo, row, col) for la, lo, row, col, _ in cells]
+
+
+def _hex_grid_positions(cx, cy, step, count):
+    """Compatibility wrapper — returns (la, lo, parent_idx) tuples."""
+    alloc = _allocate_grid(cx, cy, step, [("item", count)])
+    return [(la, lo, parent_idx) for la, lo, _, parent_idx in alloc]
+
+
+def _allocate_grid(cx: float, cy: float, step: float,
+                   structure_counts: List[Tuple[str, int]],
+                   ) -> List[Tuple[float, float, str, int]]:
+    """Allocate structures to hex grid cells, center outward.
+
+    Args:
+        structure_counts: list of (role_name, count) in priority order.
+            First entries get center cells, later entries get outer cells.
+
+    Returns list of (la, lo, role_name, parent_index) where parent_index
+    is the index of the nearest already-placed cell closer to center, or -1.
     """
     import math
 
-    # Grid with offset rows — uses full step for both axes to avoid visual overlap
-    half = step * 0.5
-    row_height = step  # full step vertically (not 0.866) to prevent structure overlap
-
-    # Generate positions in concentric hex rings around center
-    # Ring N has 6*N positions
-    all_positions = []  # (la, lo, distance_from_center)
-
-    # Ring 1: 6 immediate neighbors
-    ring1 = [
-        (cx + step, cy),              # right
-        (cx - step, cy),              # left
-        (cx + half, cy + row_height), # upper-right
-        (cx - half, cy + row_height), # upper-left
-        (cx + half, cy - row_height), # lower-right
-        (cx - half, cy - row_height), # lower-left
-    ]
-
-    # Ring 2: 12 positions
-    ring2 = [
-        (cx + step * 2, cy),                        # far right
-        (cx - step * 2, cy),                        # far left
-        (cx, cy + row_height * 2),                  # top
-        (cx, cy - row_height * 2),                  # bottom
-        (cx + step * 1.5, cy + row_height),         # right-up
-        (cx - step * 1.5, cy + row_height),         # left-up
-        (cx + step * 1.5, cy - row_height),         # right-down
-        (cx - step * 1.5, cy - row_height),         # left-down
-        (cx + step, cy + row_height * 2),           # upper-right-far
-        (cx - step, cy + row_height * 2),           # upper-left-far
-        (cx + step, cy - row_height * 2),           # lower-right-far
-        (cx - step, cy - row_height * 2),           # lower-left-far
-    ]
-
-    # Ring 3: 18 more positions
-    ring3 = [
-        (cx + step * 3, cy),
-        (cx - step * 3, cy),
-        (cx + step * 2.5, cy + row_height),
-        (cx - step * 2.5, cy + row_height),
-        (cx + step * 2.5, cy - row_height),
-        (cx - step * 2.5, cy - row_height),
-        (cx + step * 2, cy + row_height * 2),
-        (cx - step * 2, cy + row_height * 2),
-        (cx + step * 2, cy - row_height * 2),
-        (cx - step * 2, cy - row_height * 2),
-        (cx + half, cy + row_height * 3),
-        (cx - half, cy + row_height * 3),
-        (cx + half, cy - row_height * 3),
-        (cx - half, cy - row_height * 3),
-        (cx + step * 1.5, cy + row_height * 3),
-        (cx - step * 1.5, cy + row_height * 3),
-        (cx + step * 1.5, cy - row_height * 3),
-        (cx - step * 1.5, cy - row_height * 3),
-    ]
-
-    all_slots = ring1 + ring2 + ring3
-
-    # For each position, find its nearest neighbor that's closer to center (parent)
+    grid = _hex_grid(cx, cy, step)
     results = []
-    for i in range(min(count, len(all_slots))):
-        la, lo = all_slots[i]
-        la = round(float(la), 5)
-        lo = round(float(lo), 5)
+    cell_idx = 0
 
-        dist_to_center = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+    for role_name, count in structure_counts:
+        for _ in range(count):
+            if cell_idx >= len(grid):
+                break
+            la, lo, _, _ = grid[cell_idx]
+            cell_idx += 1
 
-        # Find parent: nearest already-placed position that's closer to center
-        parent_idx = -1  # default: link to hub
-        best_dist = float('inf')
+            # Find parent: nearest already-placed position closer to center
+            dist_to_center = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+            parent_idx = -1
+            best_link_dist = float('inf')
 
-        for j in range(len(results)):
-            pla, plo, _ = results[j]
-            p_dist_to_center = math.sqrt((pla - cx) ** 2 + (plo - cy) ** 2)
-            if p_dist_to_center >= dist_to_center:
-                continue  # parent must be closer to center
-            link_dist = math.sqrt((la - pla) ** 2 + (lo - plo) ** 2)
-            if link_dist < best_dist:
-                best_dist = link_dist
-                parent_idx = j
+            for j in range(len(results)):
+                pla, plo, _, _ = results[j]
+                p_dist = math.sqrt((pla - cx) ** 2 + (plo - cy) ** 2)
+                if p_dist >= dist_to_center:
+                    continue
+                link_dist = math.sqrt((la - pla) ** 2 + (lo - plo) ** 2)
+                if link_dist < best_link_dist:
+                    best_link_dist = link_dist
+                    parent_idx = j
 
-        results.append((la, lo, parent_idx))
+            results.append((la, lo, role_name, parent_idx))
 
     return results
 
@@ -808,79 +782,70 @@ def _generate_factory_setup(
     step = _angular_step(radius_km)
     cx, cy = 1.5, 3.0
 
-    # Build hub pins: LPs at center
+    # Allocate ALL structures to a unified hex grid — LPs at center, factories around
+    grid_alloc = _allocate_grid(cx, cy, step, [
+        ("launchpad", num_lps),
+        ("factory", num_factories),
+    ])
+
     pins: List[dict] = []
     links: List[dict] = []
 
-    # LP 1 (pin 1) at center
-    pins.append({"H": 0, "La": float(round(cx, 5)), "Lo": float(round(cy, 5)),
-                 "S": None, "T": pt.structures["launchpad"]})
+    # Track LP and factory pin numbers
+    lp_pins = []  # 1-indexed pin numbers of LPs
+    factory_pins = []  # 1-indexed pin numbers of factories
 
-    # Additional LPs around center
-    lp_offsets = [(step, 0), (-step, 0), (0, step), (0, -step),
-                  (step, step), (-step, step)]
-    for lp_i in range(1, num_lps):
-        off_la, off_lo = lp_offsets[(lp_i - 1) % len(lp_offsets)]
-        pins.append({"H": 0, "La": float(round(cx + off_la, 5)),
-                     "Lo": float(round(cy + off_lo, 5)),
-                     "S": None, "T": pt.structures["launchpad"]})
-        links.append({"D": len(pins), "Lv": 0, "S": 1})  # link to LP1
-
-    # Place factories in a tree, offset from LP cluster to avoid overlap
-    factory_start = len(pins) + 1  # 1-indexed pin number of first factory
-    grid_cy = cy + step * (num_lps + 1)  # offset based on LP count
-    tree = _hex_grid_positions(cx, grid_cy, step, num_factories)
-
-    for i, (la, lo, parent_idx) in enumerate(tree):
-        pins.append({"H": 0, "La": float(la), "Lo": float(lo),
-                     "S": product_id, "T": pt.structures[factory_key]})
-        # Link to parent: -1 means hub (pin 1), otherwise link to parent factory
-        if parent_idx == -1:
-            link_to = 1  # LP
+    for i, (la, lo, role, parent_idx) in enumerate(grid_alloc):
+        pin_num = i + 1  # 1-indexed
+        if role == "launchpad":
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": None, "T": pt.structures["launchpad"]})
+            lp_pins.append(pin_num)
         else:
-            link_to = factory_start + parent_idx  # parent factory pin (1-indexed)
-        links.append({"D": len(pins), "Lv": 0, "S": link_to})
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": product_id, "T": pt.structures[factory_key]})
+            factory_pins.append(pin_num)
 
-    # Round-robin LP assignment: factory i -> LP (i % num_lps) + 1
-    # All LPs are linked to LP 1, so routes from LP N go through LP 1 if needed
-    factory_lp = {}  # factory_index -> lp_pin (1-indexed)
-    for i in range(num_factories):
-        factory_lp[i] = (i % num_lps) + 1  # LP pins are 1..num_lps
+        # Link to parent (or skip for first pin)
+        if parent_idx >= 0:
+            links.append({"D": pin_num, "Lv": 0, "S": parent_idx + 1})
 
-    # Build path from each factory to its assigned LP (following parent chain)
-    def _path_to_lp(factory_index: int) -> List[int]:
-        """Build route path from a factory to its assigned LP, following the tree."""
-        target_lp = factory_lp[factory_index]
-        path = [factory_start + factory_index]
-        idx = factory_index
-        while True:
-            parent_idx = tree[idx][2]
-            if parent_idx == -1:
-                # Reached a hub-connected factory — route to assigned LP
-                if target_lp == 1:
-                    path.append(1)
-                else:
-                    path.append(1)  # go through LP1
-                    path.append(target_lp)  # then to assigned LP
-                break
-            else:
-                path.append(factory_start + parent_idx)
-                idx = parent_idx
-        return path
+    # Build adjacency for BFS pathfinding
+    from collections import deque
+    adj = {}
+    for link in links:
+        adj.setdefault(link["S"], set()).add(link["D"])
+        adj.setdefault(link["D"], set()).add(link["S"])
 
-    # Routes
+    def _find_path(start: int, end: int) -> List[int]:
+        if start == end:
+            return [start]
+        visited = {start}
+        queue = deque([(start, [start])])
+        while queue:
+            node, path = queue.popleft()
+            for neighbor in adj.get(node, set()):
+                if neighbor == end:
+                    return path + [neighbor]
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, path + [neighbor]))
+        return [start, end]  # fallback direct
+
+    # Routes: round-robin LP assignment for even distribution
     routes: List[dict] = []
 
-    for i in range(num_factories):
-        lp_pin = factory_lp[i]
-        path_to_lp = _path_to_lp(i)
-        path_from_lp = list(reversed(path_to_lp))
+    for i, fac_pin in enumerate(factory_pins):
+        assigned_lp = lp_pins[i % len(lp_pins)]
 
-        # Input routes: assigned LP -> factory (one per input material)
+        path_from_lp = _find_path(assigned_lp, fac_pin)
+        path_to_lp = list(reversed(path_from_lp))
+
+        # Input routes: LP -> factory
         for mat_name, mat_id, qty in input_info:
             routes.append({"P": path_from_lp, "Q": qty, "T": mat_id})
 
-        # Output route: factory -> assigned LP
+        # Output route: factory -> LP
         routes.append({"P": path_to_lp, "Q": recipe.output_per_cycle, "T": product_id})
 
     return {
