@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import yaml
@@ -19,6 +20,7 @@ class GameData:
     link_formulas: Dict[str, float] = field(default_factory=dict)
     decay_constants: Dict[str, float] = field(default_factory=dict)
     default_extraction_rates: Dict[str, int] = field(default_factory=dict)
+    system_index: Dict[str, dict] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "GameData":
@@ -27,6 +29,7 @@ class GameData:
         gd._load_recipes()
         gd._load_planet_types()
         gd._load_facilities()
+        gd._load_system_index()
         return gd
 
     def _load_materials(self):
@@ -90,6 +93,12 @@ class GameData:
             )
         self.link_formulas = data["link_formulas"]
         self.decay_constants = data["extraction_decay"]
+
+    def _load_system_index(self):
+        index_path = DATA_DIR / "system_index.json"
+        if index_path.exists():
+            with open(index_path, "r", encoding="utf-8") as f:
+                self.system_index = json.load(f)
 
     def get_recipe(self, tier_key: str, product: str) -> Optional[Recipe]:
         return self.recipes.get(tier_key, {}).get(product)
