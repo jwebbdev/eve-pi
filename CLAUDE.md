@@ -4,7 +4,7 @@
 
 Python library + CLI for EVE Online PI optimization.
 85 tests: `python -m pytest tests/`
-Design spec: `docs/superpowers/specs/2026-04-04-eve-pi-optimizer-rewrite-design.md`
+Design specs and plans are in the private pwnjitsu-web repo under `docs/superpowers/`
 
 ## Critical Values (Verified In-Game)
 
