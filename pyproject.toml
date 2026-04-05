@@ -19,3 +19,9 @@ dev = [
 
 [project.scripts]
 eve-pi = "eve_pi.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["eve_pi*"]
+
+[tool.setuptools.package-data]
+eve_pi = ["data/*.yaml", "version.txt"]
