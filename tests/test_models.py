@@ -7,7 +7,7 @@ def test_load_game_data():
     assert "Water" in gd.materials
     assert gd.materials["Water"].tier == "p1"
     assert gd.materials["Water"].type_id == 3645
-    assert gd.materials["Water"].volume_m3 == 0.38
+    assert gd.materials["Water"].volume_m3 == 0.19
 
 
 def test_r0_to_p1_recipe():
