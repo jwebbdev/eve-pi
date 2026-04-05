@@ -5,7 +5,9 @@
 EVE Online Planetary Interaction optimizer. Python library + FastAPI web UI at https://pi.pwnjitsu.org.
 85 tests: `python -m pytest tests/`
 Start server: `python -m eve_pi.web.app --port 8000 --reload` (reload watches `eve_pi/version.txt` only)
+Trigger reload after code changes: `echo N > eve_pi/version.txt` (increment N)
 Caddy SSL: `caddy run` from project root (needs admin terminal)
+User's config file: `j125227.json` (6 characters with individual CCU/IC levels)
 Design spec: `docs/superpowers/specs/2026-04-04-eve-pi-optimizer-rewrite-design.md`
 
 ## Critical Values (Verified In-Game)
