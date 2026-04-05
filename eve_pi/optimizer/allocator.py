@@ -37,11 +37,19 @@ class OptimizationConstraints:
         return sum(c.max_planets for c in self.characters)
 
     @property
+    def volume_unlimited(self) -> bool:
+        return self.hauling_trips_per_week <= 0 or self.cargo_capacity_m3 <= 0
+
+    @property
     def max_volume_per_week(self) -> float:
+        if self.volume_unlimited:
+            return float('inf')
         return self.hauling_trips_per_week * self.cargo_capacity_m3
 
     @property
     def max_volume_per_day(self) -> float:
+        if self.volume_unlimited:
+            return float('inf')
         return self.max_volume_per_week / 7.0
 
 

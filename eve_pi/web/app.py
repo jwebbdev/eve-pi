@@ -87,8 +87,10 @@ async def run_optimization(request: Request):
     system_name = form.get("system", "").strip()
     mode = form.get("mode", "self_sufficient")
     cycle_days = float(form.get("cycle_days") or 4)
-    trips_per_week = int(form.get("trips_per_week") or 999)
-    cargo_m3 = float(form.get("cargo_m3") or 999999)
+    trips_raw = form.get("trips_per_week", "").strip()
+    cargo_raw = form.get("cargo_m3", "").strip()
+    trips_per_week = int(trips_raw) if trips_raw else 0
+    cargo_m3 = float(cargo_raw) if cargo_raw else 0.0
     tax_rate = float(form.get("tax_rate") or 0.05)
 
     # Parse characters from dynamic form fields
