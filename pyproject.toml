@@ -24,4 +24,4 @@ eve-pi = "eve_pi.cli.main:main"
 include = ["eve_pi*"]
 
 [tool.setuptools.package-data]
-eve_pi = ["data/*.yaml", "version.txt"]
+eve_pi = ["data/*.yaml", "data/*.json", "version.txt"]
