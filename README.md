@@ -1,6 +1,6 @@
 # eve-pi
 
-Python library and CLI for EVE Online Planetary Interaction (PI) optimization.
+Python library and CLI for EVE Online Planetary Interaction (PI) optimization.  See it in action @ https://pwnjitsu.dev/eve/pi
 
 Given a solar system and your characters, eve-pi calculates the most profitable colony setup — which planets to use, what to extract, what to manufacture, and how to allocate across characters. It fetches live market data from ESI and generates importable templates you can paste directly into the game.
 
