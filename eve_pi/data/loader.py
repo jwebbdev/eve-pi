@@ -21,6 +21,7 @@ class GameData:
     decay_constants: Dict[str, float] = field(default_factory=dict)
     default_extraction_rates: Dict[str, int] = field(default_factory=dict)
     system_index: Dict[str, dict] = field(default_factory=dict)
+    system_jumps: Dict[str, List[str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "GameData":
@@ -30,6 +31,7 @@ class GameData:
         gd._load_planet_types()
         gd._load_facilities()
         gd._load_system_index()
+        gd._load_system_jumps()
         return gd
 
     def _load_materials(self):
@@ -99,6 +101,12 @@ class GameData:
         if index_path.exists():
             with open(index_path, "r", encoding="utf-8") as f:
                 self.system_index = json.load(f)
+
+    def _load_system_jumps(self):
+        jumps_path = DATA_DIR / "system_jumps.json"
+        if jumps_path.exists():
+            with open(jumps_path, "r", encoding="utf-8") as f:
+                self.system_jumps = json.load(f)
 
     def get_recipe(self, tier_key: str, product: str) -> Optional[Recipe]:
         return self.recipes.get(tier_key, {}).get(product)
