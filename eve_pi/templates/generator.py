@@ -70,12 +70,14 @@ def _angular_step(radius_km: float) -> float:
     return max(step, 0.005)
 
 
-def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
-              ) -> List[Tuple[float, float, int, int]]:
+def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 7,
+              max_ring: int = 3) -> List[Tuple[float, float, int, int]]:
     """Generate a hex grid of cell positions centered on (cx, cy).
 
     Returns list of (la, lo, row, col) sorted by distance from center.
     Uses true hex geometry: row_height = step * sqrt(3)/2, odd rows offset by step/2.
+    max_ring caps the grid radius so route paths stay within EVE's 6-link limit
+    (ring N ↔ ring N through center = 2N links).
     """
     import math
     half_grid = grid_size // 2
@@ -89,6 +91,8 @@ def _hex_grid(cx: float, cy: float, step: float, grid_size: int = 9
                 la += step * 0.5  # offset odd rows
             lo = cy + row * row_height
             dist = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+            if step > 0 and round(dist / step) > max_ring:
+                continue
             cells.append((round(float(la), 5), round(float(lo), 5), row, col, dist))
 
     # Sort by ring (distance from center), then by angle for consistent fill order
@@ -120,12 +124,15 @@ def _allocate_grid(cx: float, cy: float, step: float,
             First entries get center cells, later entries get outer cells.
 
     Returns list of (la, lo, role_name, parent_index) where parent_index
-    is the index of the nearest already-placed cell closer to center, or -1.
+    is the index of the nearest already-placed cell at a strictly lower ring,
+    or -1 for the root. Ring-based parenting guarantees tree depth == ring,
+    so the longest BFS path between any two cells is 2 * max_ring links.
     """
     import math
 
     grid = _hex_grid(cx, cy, step)
-    results = []
+    results: List[Tuple[float, float, str, int]] = []
+    ring_by_idx: List[int] = []
     cell_idx = 0
 
     for role_name, count in structure_counts:
@@ -135,22 +142,22 @@ def _allocate_grid(cx: float, cy: float, step: float,
             la, lo, _, _ = grid[cell_idx]
             cell_idx += 1
 
-            # Find parent: nearest already-placed position closer to center
-            dist_to_center = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+            dist = math.sqrt((la - cx) ** 2 + (lo - cy) ** 2)
+            ring = round(dist / step) if step > 0 else 0
+
             parent_idx = -1
             best_link_dist = float('inf')
-
-            for j in range(len(results)):
-                pla, plo, _, _ = results[j]
-                p_dist = math.sqrt((pla - cx) ** 2 + (plo - cy) ** 2)
-                if p_dist >= dist_to_center:
+            for j, p_ring in enumerate(ring_by_idx):
+                if p_ring >= ring:
                     continue
+                pla, plo, _, _ = results[j]
                 link_dist = math.sqrt((la - pla) ** 2 + (lo - plo) ** 2)
                 if link_dist < best_link_dist:
                     best_link_dist = link_dist
                     parent_idx = j
 
             results.append((la, lo, role_name, parent_idx))
+            ring_by_idx.append(ring)
 
     return results
 
@@ -188,94 +195,71 @@ def _generate_r0_to_p1(planet_type_name: str, product: str,
     step = _angular_step(radius_km)
     cx, cy = 1.5, 3.0
 
-    # Pins: LP(1), Storage(2), Basic factories(3..N+2), ECU(N+3)
-    pins: List[dict] = [
-        {"H": 0, "La": float(round(cx, 5)), "Lo": float(round(cy, 5)),
-         "S": None, "T": pt.structures["launchpad"]},
-        {"H": 0, "La": float(round(cx + step, 5)), "Lo": float(round(cy, 5)),
-         "S": None, "T": pt.structures["storage"]},
-    ]
-    links: List[dict] = [
-        {"D": 2, "Lv": 0, "S": 1},  # LP <-> Storage
-    ]
+    # Unified hex grid — LP at center, Storage/Basics/ECU fill outward rings.
+    # Links follow grid tree parents; routes use BFS over those links.
+    grid_alloc = _allocate_grid(cx, cy, step, [
+        ("launchpad", 1),
+        ("storage", 1),
+        ("basic_factory", num_basics),
+        ("extractor", 1),
+    ])
 
-    # Place basic factories in hex grid, offset from LP/Storage
-    grid_cy = cy + step * 2
-    tree = _hex_grid_positions(cx, grid_cy, step, num_basics)
-    factory_start = len(pins) + 1  # 1-indexed
+    pins: List[dict] = []
+    links: List[dict] = []
+    lp_pin = storage_pin = ecu_pin = None
+    factory_pins: List[int] = []
 
-    for i, (la, lo, parent_idx) in enumerate(tree):
-        pins.append({"H": 0, "La": float(la), "Lo": float(lo),
-                     "S": p1_id, "T": pt.structures["basic_factory"]})
-        # Link: factories chain to each other, ring-1 factories link to LP or Storage
-        if parent_idx == -1:
-            link_to = _parent_pin(i)  # alternate LP(1) / Storage(2)
-        else:
-            link_to = factory_start + parent_idx
-        links.append({"D": len(pins), "Lv": 0, "S": link_to})
+    for i, (la, lo, role, parent_idx) in enumerate(grid_alloc):
+        pin_num = i + 1
+        if role == "launchpad":
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": None, "T": pt.structures["launchpad"]})
+            lp_pin = pin_num
+        elif role == "storage":
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": None, "T": pt.structures["storage"]})
+            storage_pin = pin_num
+        elif role == "basic_factory":
+            pins.append({"H": 0, "La": float(la), "Lo": float(lo),
+                         "S": p1_id, "T": pt.structures["basic_factory"]})
+            factory_pins.append(pin_num)
+        else:  # extractor
+            pins.append({"H": num_heads, "La": float(la), "Lo": float(lo),
+                         "S": r0_id, "T": pt.structures["extractor"]})
+            ecu_pin = pin_num
 
-    # ECU
-    ecu_pin = len(pins) + 1
-    pins.append({"H": num_heads, "La": float(round(cx - step * 2, 5)),
-                 "Lo": float(round(cy, 5)),
-                 "S": r0_id, "T": pt.structures["extractor"]})
-    links.append({"D": ecu_pin, "Lv": 0, "S": 2})  # ECU -> Storage
+        if parent_idx >= 0:
+            links.append({"D": pin_num, "Lv": 0, "S": parent_idx + 1})
 
-    # Build path from each factory back to hub (following parent chain)
-    def _path_to_hub(factory_index: int) -> List[int]:
-        path = [factory_start + factory_index]
-        idx = factory_index
-        while True:
-            parent_idx = tree[idx][2]
-            if parent_idx == -1:
-                # This factory links to LP or Storage
-                hub_pin = _parent_pin(idx)
-                path.append(hub_pin)
-                break
-            else:
-                path.append(factory_start + parent_idx)
-                idx = parent_idx
-        return path
+    from collections import deque
+    adj = {}
+    for link in links:
+        adj.setdefault(link["S"], set()).add(link["D"])
+        adj.setdefault(link["D"], set()).add(link["S"])
 
-    # Routes
+    def _find_path(start: int, end: int) -> List[int]:
+        if start == end:
+            return [start]
+        visited = {start}
+        queue = deque([(start, [start])])
+        while queue:
+            node, path = queue.popleft()
+            for neighbor in adj.get(node, set()):
+                if neighbor == end:
+                    return path + [neighbor]
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, path + [neighbor]))
+        return [start, end]
+
     routes: List[dict] = []
+    for fp in factory_pins:
+        path_in = _find_path(storage_pin, fp)
+        routes.append({"P": path_in, "Q": r0_qty, "T": r0_id})
+        path_out = _find_path(fp, lp_pin)
+        routes.append({"P": path_out, "Q": recipe.output_per_cycle, "T": p1_id})
 
-    # R0: Storage -> each Basic Factory (R0 can't route through factories!)
-    # For R0, every factory must have a direct link to LP or Storage
-    # Since tree factories may chain through other factories, R0 routes need
-    # to go Storage -> LP -> factory (for ring-1 factories linked to LP)
-    # or Storage -> factory (for ring-1 factories linked to Storage)
-    # For deeper factories, R0 CAN route through other basic factories
-    # because EVE allows R0 to pass through — wait, no it can't!
-    # R0 routing through basic factories fails. So for extraction setups,
-    # ALL factories must link directly to LP or Storage (no chaining).
-    # Re-link: override tree parents so all connect to LP or Storage
-    links_override = []
-    for i in range(len(links)):
-        if links[i]["D"] >= factory_start and links[i]["D"] <= factory_start + num_basics - 1:
-            # This is a factory link — force it to LP or Storage
-            factory_idx = links[i]["D"] - factory_start
-            links[i]["S"] = _parent_pin(factory_idx)
-
-    for i in range(num_basics):
-        pin = factory_start + i
-        parent = _parent_pin(i)
-        if parent == 1:
-            routes.append({"P": [2, 1, pin], "Q": r0_qty, "T": r0_id})
-        else:
-            routes.append({"P": [2, pin], "Q": r0_qty, "T": r0_id})
-
-    # P1: each Basic Factory -> LP
-    for i in range(num_basics):
-        pin = factory_start + i
-        parent = _parent_pin(i)
-        if parent == 1:
-            routes.append({"P": [pin, 1], "Q": recipe.output_per_cycle, "T": p1_id})
-        else:
-            routes.append({"P": [pin, 2, 1], "Q": recipe.output_per_cycle, "T": p1_id})
-
-    # ECU program route: ECU -> Storage
-    routes.append({"P": [ecu_pin, 2], "Q": r0_qty, "T": r0_id})
+    routes.append({"P": _find_path(ecu_pin, storage_pin), "Q": r0_qty, "T": r0_id})
 
     return {
         "CmdCtrLv": ccu_level,
